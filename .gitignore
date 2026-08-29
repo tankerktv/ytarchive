@@ -1,0 +1,35 @@
+# Секреты — первым делом, до того как в проект что-то положено.
+# Куки YouTube это действующая сессия аккаунта открытым текстом:
+# кто получит файл, тот получит доступ к аккаунту.
+cookies.txt
+*.cookies
+secrets.toml
+.env
+*.pem
+*.key
+
+# Состояние и данные пользователя
+downloaded.txt
+*.db
+*.sqlite3
+logs/
+downloads/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Сборка и упаковка
+*.spec
+installer/out/
+
+# Среда разработки
+.vscode/
+.idea/

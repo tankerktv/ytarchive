@@ -1,0 +1,14 @@
+# Проект собирается под Windows, macOS и Linux. Без этого файла перевод строки
+# зависит от того, кто последним трогал файл, и диффы наполняются шумом.
+* text=auto eol=lf
+
+# Windows-скрипты обязаны иметь CRLF, иначе PowerShell 5.1 и cmd их не разберут.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Двоичное не трогать.
+*.png binary
+*.ico binary
+*.exe binary
+*.webp binary

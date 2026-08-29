@@ -1,0 +1,24 @@
+[project]
+name = "ytarchive"
+# Версия — источник истины для тега релиза. CI обязан валить сборку,
+# если version здесь и тег vX.Y.Z разошлись.
+version = "0.1.0"
+description = "Архиватор YouTube-каналов: качает новое в фоне и показывает ход работы"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Ядро лежит в корне проекта; без этого тесты его не находят.
+pythonpath = ["."]
+# Русские имена тестов — осознанно: тест «настоящий случай» должен читаться
+# как описание того, что однажды сломалось.
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
