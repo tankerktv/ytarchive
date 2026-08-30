@@ -9,6 +9,7 @@ secrets.toml
 *.key
 
 # Состояние и данные пользователя
+ytarchive.toml
 downloaded.txt
 *.db
 *.sqlite3
