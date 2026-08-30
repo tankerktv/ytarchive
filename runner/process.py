@@ -119,6 +119,13 @@ def run_watched(
     `on_line` зовётся на каждую строку вывода — через него интерфейс получает
     прогресс. Исключение в нём не должно ронять выкачку, поэтому оно гасится.
     """
+    # Потомок обязан говорить в UTF-8. Без этого yt-dlp на Windows печатает
+    # кириллицу в системной кодировке, мы читаем её как UTF-8, и названия
+    # роликов превращаются в мусор — в журнале, в интерфейсе, везде.
+    child_env = dict(os.environ if env is None else env)
+    child_env.setdefault("PYTHONIOENCODING", "utf-8")
+    child_env.setdefault("PYTHONUTF8", "1")
+
     popen_kwargs: dict[str, object] = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
@@ -129,7 +136,7 @@ def run_watched(
         "errors": "replace",
         "bufsize": 1,
         "cwd": cwd,
-        "env": env,
+        "env": child_env,
     }
     if sys.platform != "win32":
         popen_kwargs["start_new_session"] = True

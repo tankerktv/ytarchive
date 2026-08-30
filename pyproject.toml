@@ -4,9 +4,13 @@ name = "ytarchive"
 # если version здесь и тег vX.Y.Z разошлись.
 version = "0.1.0"
 description = "Архиватор YouTube-каналов: качает новое в фоне и показывает ход работы"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
-dependencies = []
+dependencies = [
+    # На 3.10 нет tomllib. Единственный настоящий интерпретатор
+    # на целевой машине — 3.10, и задание должно работать на нём.
+    'tomli>=2 ; python_version < "3.11"',
+]
 
 [project.optional-dependencies]
 # pyyaml нужен tools/check_ci.py: проверка конфигурации CI запускается

@@ -12,6 +12,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# tomllib появился в 3.11. На машине, где это писалось, настоящий
+# интерпретатор только 3.10 — а привязываться к тому, чего нет,
+# значит получить задание, падающее до первой строки Python.
+try:
+    import tomllib as _toml
+except ModuleNotFoundError:  # pragma: no cover — ветка для 3.10
+    import tomli as _toml
+
+
 from core.ytdlp_args import ALLOWED_HEIGHTS
 
 #: Ключи, которые мы понимаем. Всё остальное — повод пожаловаться.
@@ -50,6 +59,14 @@ class Config:
     sub_langs: tuple[str, ...] = ("ru", "en")
     break_on_existing: bool = False
     limits: Limits = Limits()
+
+
+def loads(text: str) -> dict:
+    """Разобрать TOML. Единственное место, где это делается."""
+    return _toml.loads(text)
+
+
+TomlError = _toml.TOMLDecodeError
 
 
 class ConfigError(ValueError):

@@ -5,11 +5,9 @@
 почему качается 1080».
 """
 
-import tomllib
-
 import pytest
 
-from core.config import DEFAULT_CONFIG_TEXT, ConfigError, parse_config
+from core.config import DEFAULT_CONFIG_TEXT, ConfigError, loads, parse_config
 
 
 def настройки(**разделы):
@@ -27,7 +25,7 @@ def test_минимальные_настройки():
 
 def test_образец_настроек_разбирается():
     # Образец, который мы даём человеку, обязан быть годным.
-    config = parse_config(tomllib.loads(DEFAULT_CONFIG_TEXT))
+    config = parse_config(loads(DEFAULT_CONFIG_TEXT))
     assert config.paths.base
     assert config.limits.silence_limit > config.limits.sleep_max
 

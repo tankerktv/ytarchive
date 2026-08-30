@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tomllib
 from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
 
 from core.archive import parse_archive
 from core.channels import parse_channels
-from core.config import DEFAULT_CONFIG_TEXT, Config, ConfigError, parse_config
+from core.config import DEFAULT_CONFIG_TEXT, Config, ConfigError, TomlError, loads, parse_config
 from core.planner import estimate_range
 from core.progress import Event, EventKind
 from core.supervisor import WatchdogPolicy
@@ -40,12 +39,12 @@ def resolve(base: Path, value: str) -> Path:
 
 def load_config(path: Path) -> tuple[Config, Path]:
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise ConfigError(
             f"нет файла настроек {path}. Создать образец: ytarchive init"
         ) from None
-    except tomllib.TOMLDecodeError as error:
+    except TomlError as error:
         raise ConfigError(f"{path}: не разбирается как TOML — {error}") from None
     return parse_config(data), path
 
