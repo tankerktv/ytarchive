@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 import tomllib
+from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from core.planner import estimate_range
 from core.progress import Event, EventKind
 from core.supervisor import WatchdogPolicy
 from core.ytdlp_args import DownloadSettings
+from runner.lockfile import acquire
 from runner.session import SessionConfig, probe_channel, run_session
 
 CONFIG_NAME = "ytarchive.toml"
@@ -146,19 +148,43 @@ def cmd_run(args) -> int:
     base = Path(config.paths.base)
     session = build_session(config, base)
 
-    def on_event(event: Event) -> None:
-        if event.kind is EventKind.DESTINATION:
-            print(f"  качаю {Path(event.path).name}")
-        elif event.kind is EventKind.COMPLETED and event.size_bytes:
-            скорость = f", {event.speed_bps / 1024**2:.2f} МБ/с" if event.speed_bps else ""
-            print(f"    готово {event.size_bytes / 1024**2:.1f} МБ{скорость}")
-        elif event.kind is EventKind.ERROR:
-            print(f"    отказ: {event.text[:120]}")
+    logs_dir = resolve(base, config.paths.logs)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_path = logs_dir / f"{datetime.now():%Y-%m-%d_%H%M}.log"
+    log = log_path.open("a", encoding="utf-8", newline="\n")
 
-    итог = run_session(session, on_event=on_event, on_message=lambda m: print(m))
-    print()
-    print(итог.describe())
-    return 1 if итог.needs_human else 0
+    def скажи(текст: str) -> None:
+        строка = f"{datetime.now():%H:%M:%S}  {текст}"
+        print(строка, flush=True)
+        log.write(строка + "\n")
+        log.flush()
+
+    lock, объяснение = acquire(logs_dir.parent / "_tools" / "ytarchive.lock")
+    if lock is None:
+        скажи(объяснение)
+        log.close()
+        return 0  # не беда: просто работает другой экземпляр
+    скажи(объяснение)
+
+    try:
+        with lock:
+            def on_event(event: Event) -> None:
+                # Отмечаемся на каждом событии: пока выкачка говорит,
+                # замок не должен протухнуть под живой работой.
+                lock.heartbeat()
+                if event.kind is EventKind.DESTINATION:
+                    скажи(f"  качаю {Path(event.path).name}")
+                elif event.kind is EventKind.COMPLETED and event.size_bytes:
+                    скорость = f", {event.speed_bps / 1024**2:.2f} МБ/с" if event.speed_bps else ""
+                    скажи(f"    готово {event.size_bytes / 1024**2:.1f} МБ{скорость}")
+                elif event.kind is EventKind.ERROR:
+                    скажи(f"    отказ: {event.text[:120]}")
+
+            итог = run_session(session, on_event=on_event, on_message=скажи)
+            скажи(итог.describe())
+            return 1 if итог.needs_human else 0
+    finally:
+        log.close()
 
 
 def main(argv: list[str] | None = None) -> int:
