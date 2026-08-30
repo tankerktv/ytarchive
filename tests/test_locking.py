@@ -81,3 +81,32 @@ def test_порог_протухания_больше_предела_молча�
 def test_описание_объясняет_что_происходит(состояние, примета):
     строка = describe(состояние, LockInfo(pid=42, heartbeat=0.0))
     assert примета in строка
+
+
+# --- проверка живости процесса ---------------------------------------------
+
+
+def test_свой_процесс_считается_живым():
+    """Найдено самопроверкой окна: на Windows os.kill(pid, 0) падает с
+    WinError 87, и Python превращает это в SystemError мимо обычных
+    перехватов — замок ронял всё, что его спрашивало.
+    """
+    import os
+
+    from runner.lockfile import pid_alive
+
+    assert pid_alive(os.getpid()) is True
+
+
+def test_несуществующий_процесс_считается_мёртвым():
+    from runner.lockfile import pid_alive
+
+    # Заведомо свободный номер: такого процесса не бывает.
+    assert pid_alive(999_999_999) is False
+
+
+def test_бессмысленный_номер_процесса_отвергается():
+    from runner.lockfile import pid_alive
+
+    assert pid_alive(0) is False
+    assert pid_alive(-1) is False

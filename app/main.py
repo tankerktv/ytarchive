@@ -8,6 +8,7 @@
     ytarchive check           достучаться до каналов, ничего не качая
     ytarchive plan            что будет скачано и сколько это займёт
     ytarchive run             качать
+    ytarchive gui             окно наблюдения
 """
 
 from __future__ import annotations
@@ -186,6 +187,33 @@ def cmd_run(args) -> int:
         log.close()
 
 
+def cmd_gui(args) -> int:
+    """Окно наблюдения. Qt подтягивается только здесь: командная строка
+    и фоновое задание не должны требовать его установки."""
+    config, _ = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    archive = resolve(base, config.paths.archive)
+
+    try:
+        from gui.source import ArchiveSource
+        from gui.window import run
+    except ImportError as error:
+        print(f"окно требует PySide6, а его нет: {error}", file=sys.stderr)
+        print(
+            "поставить:  .venv/Scripts/python.exe -m pip install PySide6-Essentials",
+            file=sys.stderr,
+        )
+        return 2
+
+    source = ArchiveSource(
+        base=base,
+        archive_path=archive,
+        logs_dir=resolve(base, config.paths.logs),
+        lock_path=archive.parent / "ytarchive.lock",
+    )
+    return run(source, selftest=args.selftest)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ytarchive", description=__doc__)
     parser.add_argument("--config", default=CONFIG_NAME, help=f"файл настроек (по умолчанию {CONFIG_NAME})")
@@ -199,6 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("plan", help="что будет скачано, без изменений").set_defaults(func=cmd_plan)
     sub.add_parser("check", help="достучаться до каналов").set_defaults(func=cmd_check)
     sub.add_parser("run", help="качать").set_defaults(func=cmd_run)
+
+    p_gui = sub.add_parser("gui", help="окно наблюдения")
+    p_gui.add_argument("--selftest", action="store_true",
+                       help="построить окно и выйти — для сборки")
+    p_gui.set_defaults(func=cmd_gui)
 
     args = parser.parse_args(argv)
     try:

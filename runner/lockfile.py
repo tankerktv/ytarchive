@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,20 +27,39 @@ STALE_AFTER = 600.0
 def pid_alive(pid: int) -> bool:
     """Числится ли процесс живым.
 
-    На Windows нет сигнала 0, поэтому спрашиваем через tasklist только когда
-    дешёвый способ недоступен. Ошибка прав означает «процесс есть, но чужой» —
-    это тоже «жив».
+    На Windows `os.kill(pid, 0)` не годится: сигнала 0 там нет, вызов падает
+    с WinError 87, и Python превращает это в SystemError мимо обычных
+    перехватов. Поймано самопроверкой окна — до неё замок молча ронял всё,
+    что его спрашивало. Поэтому здесь честная развилка по системе.
     """
     if pid <= 0:
         return False
+
+    if sys.platform == "win32":
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                # Завершившийся процесс ещё отдаёт дескриптор, пока его держат:
+                # живым считаем только того, кто действительно не вышел.
+                return code.value == STILL_ACTIVE
+            return True
+        finally:
+            kernel32.CloseHandle(handle)
+
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
+        # Процесс есть, просто чужой — это тоже «жив».
         return True
     except OSError:
-        # На Windows os.kill бросает OSError для несуществующих.
         return False
     return True
 
