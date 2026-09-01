@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
@@ -23,6 +24,7 @@ from core.archive import parse_archive
 from core.channels import parse_channels
 from core.config import DEFAULT_CONFIG_TEXT, Config, ConfigError, TomlError, loads, parse_config
 from core.planner import estimate_range
+from core.livestate import LiveState, apply_event, should_write, start_channel, to_text
 from core.progress import Event, EventKind
 from core.supervisor import WatchdogPolicy
 from core.ytdlp_args import DownloadSettings
@@ -159,6 +161,23 @@ def cmd_run(args) -> int:
         log.write(строка + "\n")
         log.flush()
 
+    # Живое состояние — отдельным файлом: в журнал проценты не пишем,
+    # он бы распух до сотен тысяч строк, а окну они нужны каждую секунду.
+    live_path = logs_dir.parent / "_tools" / "ytarchive-live.json"
+    live = LiveState()
+    last_write = 0.0
+
+    def записать_состояние(force: bool = False) -> None:
+        nonlocal last_write
+        now = time.time()
+        if not force and not should_write(last_write, now):
+            return
+        try:
+            live_path.write_text(to_text(live), encoding="utf-8", newline="\n")
+        except OSError:
+            pass  # окно переживёт отсутствие файла; выкачка важнее
+        last_write = now
+
     lock, объяснение = acquire(logs_dir.parent / "_tools" / "ytarchive.lock")
     if lock is None:
         скажи(объяснение)
@@ -169,9 +188,12 @@ def cmd_run(args) -> int:
     try:
         with lock:
             def on_event(event: Event) -> None:
+                nonlocal live
                 # Отмечаемся на каждом событии: пока выкачка говорит,
                 # замок не должен протухнуть под живой работой.
                 lock.heartbeat()
+                live = apply_event(live, event, now=time.time())
+                записать_состояние()
                 if event.kind is EventKind.DESTINATION:
                     скажи(f"  качаю {Path(event.path).name}")
                 elif event.kind is EventKind.COMPLETED and event.size_bytes:
@@ -180,8 +202,17 @@ def cmd_run(args) -> int:
                 elif event.kind is EventKind.ERROR:
                     скажи(f"    отказ: {event.text[:120]}")
 
-            итог = run_session(session, on_event=on_event, on_message=скажи)
+            def на_канал(имя: str, номер: int, всего: int) -> None:
+                nonlocal live
+                live = start_channel(live, имя, номер, всего, now=time.time())
+                записать_состояние(force=True)
+
+            итог = run_session(
+                session, on_event=on_event, on_message=скажи, on_channel=на_канал
+            )
             скажи(итог.describe())
+            live = LiveState(updated_at=time.time())
+            записать_состояние(force=True)
             return 1 if итог.needs_human else 0
     finally:
         log.close()
@@ -212,6 +243,7 @@ def cmd_gui(args) -> int:
         lock_path=archive.parent / "ytarchive.lock",
         channels_path=resolve(base, config.paths.channels),
         config_path=Path(args.config),
+        live_path=archive.parent / "ytarchive-live.json",
     )
     return run(source, selftest=args.selftest)
 

@@ -18,6 +18,7 @@ from enum import Enum
 
 class EventKind(Enum):
     DESTINATION = "начал файл"
+    PROGRESS = "идёт загрузка"
     COMPLETED = "файл докачан"
     ITEM = "перешёл к следующему ролику"
     MERGING = "сливает потоки"
@@ -36,6 +37,8 @@ class Event:
     speed_bps: float | None = None
     index: int | None = None
     total: int | None = None
+    percent: float | None = None
+    eta: str = ""
 
     @property
     def is_error(self) -> bool:
@@ -60,6 +63,16 @@ _COMPLETED = re.compile(
     r"(?:\s+at\s+(?P<speed>[\d.]+)(?P<sunit>[KMGT]?i?B)/s)?",
     re.IGNORECASE,
 )
+#: Строка идущей загрузки. Размер бывает с тильдой (`~1.23GiB`) — это оценка,
+#: пока сервер не сказал точный размер; скорость и остаток бывают `Unknown`,
+#: и это законно, а не поломка: в самом начале их ещё неоткуда взять.
+_PROGRESS = re.compile(
+    r"^\[download\]\s+(?P<percent>[\d.]+)%\s+of\s+~?\s*(?P<size>[\d.]+)(?P<unit>[KMGT]?i?B)"
+    r"(?:\s+at\s+(?:(?P<speed>[\d.]+)(?P<sunit>[KMGT]?i?B)/s|Unknown\s*B?/?s?))?"
+    r"(?:\s+ETA\s+(?P<eta>[\d:]+|Unknown))?",
+    re.IGNORECASE,
+)
+
 _ITEM = re.compile(r"^\[download\]\s+Downloading item\s+(?P<index>\d+)\s+of\s+(?P<total>\d+)")
 _MERGING = re.compile(r'^\[Merger\]\s+Merging formats into\s+"(?P<path>.+)"')
 _SLEEPING = re.compile(r"Sleeping\s+(?P<seconds>[\d.]+)\s+seconds", re.IGNORECASE)
@@ -114,6 +127,23 @@ def parse_line(line: str) -> Event:
             size_bytes=size,
             seconds=seconds,
             speed_bps=speed,
+        )
+
+    # Идущая загрузка проверяется ПОСЛЕ завершённой: строка «100% of … in …»
+    # тоже начинается с процентов, и порядок здесь несущий.
+    match = _PROGRESS.match(stripped)
+    if match:
+        speed = None
+        if match.group("speed"):
+            speed = float(parse_size(match.group("speed"), match.group("sunit")))
+        eta = match.group("eta") or ""
+        return Event(
+            kind=EventKind.PROGRESS,
+            text=stripped,
+            percent=float(match.group("percent")),
+            size_bytes=parse_size(match.group("size"), match.group("unit")),
+            speed_bps=speed,
+            eta="" if eta.lower() == "unknown" else eta,
         )
 
     match = _ITEM.match(stripped)

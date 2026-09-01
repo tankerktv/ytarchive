@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QSystemTrayIcon,
@@ -123,6 +124,23 @@ class Window(QMainWindow):
         self.подпись.setStyleSheet("color: #666;")
         self.подпись.setWordWrap(True)
         столбец.addWidget(self.подпись)
+
+        # Две полосы: текущий файл и проход по каналу. Обе показываются только
+        # когда есть что показывать — пустая полоса на нуле выглядит как
+        # застрявшая работа и тревожит на ровном месте.
+        self.полоса_файла = QProgressBar()
+        self.полоса_файла.setFormat("%p%")
+        self.подпись_файла = QLabel("")
+        self.подпись_файла.setStyleSheet("color: #666;")
+        столбец.addWidget(self.подпись_файла)
+        столбец.addWidget(self.полоса_файла)
+
+        self.полоса_канала = QProgressBar()
+        self.полоса_канала.setFormat("%p%")
+        self.подпись_канала = QLabel("")
+        self.подпись_канала.setStyleSheet("color: #666;")
+        столбец.addWidget(self.подпись_канала)
+        столбец.addWidget(self.полоса_канала)
 
         ряд = QHBoxLayout()
         self.кнопка_пуск = QPushButton("Запустить")
@@ -375,6 +393,8 @@ class Window(QMainWindow):
             части.append(f"отказов в этом сеансе {снимок.errors} — заберутся следующим проходом")
         self.подпись.setText(" · ".join(части))
 
+        self._обновить_полосы(снимок)
+
         self.кнопка_пуск.setEnabled(not снимок.state.is_working)
         self.кнопка_стоп.setEnabled(снимок.state.is_working)
 
@@ -393,6 +413,39 @@ class Window(QMainWindow):
             self._последний_журнал = текст
 
         self._обновить_таблицу()
+
+    def _обновить_полосы(self, снимок) -> None:
+        """Полосы показываются, только когда есть что показывать.
+
+        Пустая полоса на нуле выглядит как застрявшая работа и тревожит
+        на ровном месте — а выкачка в это время может просто ждать паузы
+        между роликами.
+        """
+        живое = self.source.live_state() if снимок.state.is_working else None
+
+        показать_файл = bool(живое and живое.has_file)
+        self.полоса_файла.setVisible(показать_файл)
+        self.подпись_файла.setVisible(показать_файл)
+        if показать_файл:
+            self.полоса_файла.setValue(int(живое.percent))
+            части = [живое.file_name]
+            if живое.size_bytes:
+                части.append(f"{живое.size_bytes / 1024**2:.0f} МБ")
+            if живое.speed_bps:
+                части.append(f"{живое.speed_bps / 1024**2:.1f} МБ/с")
+            if живое.eta:
+                части.append(f"осталось {живое.eta}")
+            self.подпись_файла.setText(" · ".join(части))
+
+        показать_канал = bool(живое and живое.item_total)
+        self.полоса_канала.setVisible(показать_канал)
+        self.подпись_канала.setVisible(показать_канал)
+        if показать_канал:
+            self.полоса_канала.setValue(int(живое.item_fraction() * 100))
+            подпись = f"{живое.channel}: ролик {живое.item_index} из {живое.item_total}"
+            if живое.channel_total:
+                подпись += f" · канал {живое.channel_index} из {живое.channel_total}"
+            self.подпись_канала.setText(подпись)
 
     def _обновить_таблицу(self) -> None:
         строки = self.source.channel_stats()

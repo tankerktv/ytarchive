@@ -28,6 +28,7 @@ class ArchiveSource:
     lock_path: Path
     channels_path: Path
     config_path: Path
+    live_path: Path
     task_name: str = TASK_NAME
 
     def log_tail(self, lines: int) -> list[str]:
@@ -112,6 +113,16 @@ class ArchiveSource:
             итог.append((папка.name, файлов, байт))
         return итог
 
+    def live_state(self):
+        """Живое состояние выкачки. Отсутствие файла — не беда: выкачка
+        могла ещё не запускаться."""
+        from core.livestate import from_text
+
+        try:
+            return from_text(self.live_path.read_text(encoding="utf-8"))
+        except OSError:
+            return None
+
     def download_running(self) -> bool:
         """Идёт ли выкачка.
 
@@ -143,6 +154,8 @@ class ArchiveSource:
                 encoding="utf-8",
                 errors="replace",
                 timeout=30,
+                # Иначе кнопка в окне мигает консолью.
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except (OSError, subprocess.TimeoutExpired) as ошибка:
             return f"не вышло: {ошибка}"

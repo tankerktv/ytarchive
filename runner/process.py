@@ -76,6 +76,7 @@ def _kill_tree(process: subprocess.Popen, grace: float) -> tuple[bool, bool]:
             ["taskkill", "/F", "/T", "/PID", str(process.pid)],
             capture_output=True,
             check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
     else:
         try:
@@ -138,7 +139,12 @@ def run_watched(
         "cwd": cwd,
         "env": child_env,
     }
-    if sys.platform != "win32":
+    if sys.platform == "win32":
+        # Без этого каждый запуск yt-dlp открывает своё окно консоли.
+        # На проходе в тысячу роликов они мельтешат перед человеком весь день,
+        # хотя показать им нечего — весь вывод и так идёт к нам в трубу.
+        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    else:
         popen_kwargs["start_new_session"] = True
 
     started = clock()

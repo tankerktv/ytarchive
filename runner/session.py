@@ -133,6 +133,7 @@ def run_session(
     *,
     on_event: Callable[[Event], None] | None = None,
     on_message: Callable[[str], None] | None = None,
+    on_channel: Callable[[str, int, int], None] | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> SessionSummary:
     """Пройти по всем каналам списка."""
@@ -155,7 +156,9 @@ def run_session(
             on_message(f"строка {problem.line_number} пропущена: {problem.reason}")
 
     results: list[ChannelResult] = []
-    for channel in parsed.channels:
+    for номер, channel in enumerate(parsed.channels, start=1):
+        if on_channel is not None:
+            on_channel(channel.name, номер, len(parsed.channels))
         решение, диагноз = probe_channel(channel, config, on_event=on_message, sleep=sleep)
         if решение is None or решение.action is Action.STOP:
             причина = решение.reason if решение else "проверка не дала ответа"
