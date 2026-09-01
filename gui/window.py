@@ -6,37 +6,47 @@
 
 Отсюда главное следствие: окно можно закрыть, и ничего не остановится.
 
-Весь смысл — в `core.status`. Здесь только Qt: взять снимок и нарисовать.
+Весь смысл — в `core`. Здесь только Qt: взять снимок и нарисовать.
 Если сюда захотелось добавить `if` с содержательным условием, его место в ядре.
 """
 
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSpinBox,
+    QSystemTrayIcon,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from core.archive import parse_archive
+from core.channels import format_channels, parse_channels
+from core.config import ConfigError, dump_config, loads, parse_config
 from core.status import RunState, build_status
+from core.ytdlp_args import ALLOWED_HEIGHTS
 from gui.source import ArchiveSource
 
 #: Как часто обновляемся. Журнал разрежен, чаще незачем — а лишние чтения
 #: файла с сетевого диска стоят дороже, чем кажется.
 REFRESH_MS = 2000
-
-#: Сколько последних строк журнала показываем.
 TAIL_LINES = 300
 
 ЦВЕТА = {
@@ -47,19 +57,60 @@ TAIL_LINES = 300
 }
 
 
+def нарисовать_значок(цвет: str) -> QIcon:
+    """Значок для трея — рисуем, а не носим картинкой в репозитории.
+
+    Цвет отвечает состоянию, поэтому по трею видно, идёт ли выкачка,
+    не открывая окна.
+    """
+    полотно = QPixmap(64, 64)
+    полотно.fill(Qt.GlobalColor.transparent)
+    кисть = QPainter(полотно)
+    кисть.setRenderHint(QPainter.RenderHint.Antialiasing)
+    кисть.setBrush(QColor(цвет))
+    кисть.setPen(Qt.PenStyle.NoPen)
+    кисть.drawEllipse(4, 4, 56, 56)
+    кисть.setPen(QColor("white"))
+    шрифт = QFont()
+    шрифт.setPointSize(30)
+    шрифт.setBold(True)
+    кисть.setFont(шрифт)
+    # Стрелка вниз: «качает». Читается в трее даже в 16 точек.
+    кисть.drawText(полотно.rect(), Qt.AlignmentFlag.AlignCenter, "↓")
+    кисть.end()
+    return QIcon(полотно)
+
+
 class Window(QMainWindow):
     def __init__(self, source: ArchiveSource) -> None:
         super().__init__()
         self.source = source
         self.setWindowTitle("Архив YouTube")
-        self.resize(900, 600)
+        self.resize(940, 640)
 
+        self.вкладки = QTabWidget()
+        self.вкладки.addTab(self._вкладка_обзор(), "Обзор")
+        self.вкладки.addTab(self._вкладка_каналы(), "Каналы")
+        self.вкладки.addTab(self._вкладка_настройки(), "Настройки")
+        self.setCentralWidget(self.вкладки)
+
+        self._последний_журнал = ""
+        self._предупредили_о_трее = False
+        self._собрать_трей()
+
+        self.таймер = QTimer(self)
+        self.таймер.timeout.connect(self.обновить)
+        self.таймер.start(REFRESH_MS)
+        self.обновить()
+
+    # --- вкладка «Обзор» ----------------------------------------------------
+
+    def _вкладка_обзор(self) -> QWidget:
         корень = QWidget()
         столбец = QVBoxLayout(корень)
         столбец.setContentsMargins(16, 12, 16, 12)
         столбец.setSpacing(10)
 
-        # --- шапка ---------------------------------------------------------
         self.заголовок = QLabel("читаю состояние…")
         шрифт = self.заголовок.font()
         шрифт.setPointSize(шрифт.pointSize() + 3)
@@ -73,34 +124,230 @@ class Window(QMainWindow):
         self.подпись.setWordWrap(True)
         столбец.addWidget(self.подпись)
 
-        # --- кнопки --------------------------------------------------------
         ряд = QHBoxLayout()
         self.кнопка_пуск = QPushButton("Запустить")
         self.кнопка_стоп = QPushButton("Остановить")
-        self.кнопка_обновить = QPushButton("Обновить")
-        for кнопка in (self.кнопка_пуск, self.кнопка_стоп, self.кнопка_обновить):
+        обновить = QPushButton("Обновить")
+        for кнопка in (self.кнопка_пуск, self.кнопка_стоп, обновить):
             ряд.addWidget(кнопка)
         ряд.addStretch(1)
         столбец.addLayout(ряд)
 
         self.кнопка_пуск.clicked.connect(self._пуск)
         self.кнопка_стоп.clicked.connect(self._стоп)
-        self.кнопка_обновить.clicked.connect(self.обновить)
+        обновить.clicked.connect(self.обновить)
 
-        # --- журнал --------------------------------------------------------
         self.журнал = QPlainTextEdit()
         self.журнал.setReadOnly(True)
         self.журнал.setFont(QFont("Consolas", 10))
         self.журнал.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         столбец.addWidget(self.журнал, 1)
+        return корень
 
-        self.setCentralWidget(корень)
+    # --- вкладка «Каналы» ---------------------------------------------------
 
-        self._последний_журнал = ""
-        self.таймер = QTimer(self)
-        self.таймер.timeout.connect(self.обновить)
-        self.таймер.start(REFRESH_MS)
-        self.обновить()
+    def _вкладка_каналы(self) -> QWidget:
+        корень = QWidget()
+        столбец = QVBoxLayout(корень)
+        столбец.setContentsMargins(16, 12, 16, 12)
+
+        столбец.addWidget(QLabel("Сколько уже лежит в архиве по каждому каналу:"))
+        self.таблица = QTableWidget(0, 3)
+        self.таблица.setHorizontalHeaderLabels(["Канал", "Файлов", "Объём"])
+        self.таблица.horizontalHeader().setStretchLastSection(True)
+        self.таблица.setColumnWidth(0, 380)
+        self.таблица.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        столбец.addWidget(self.таблица)
+
+        столбец.addWidget(QLabel("Список каналов — по строке на канал, «Название|адрес»:"))
+        self.поле_каналов = QPlainTextEdit()
+        self.поле_каналов.setFont(QFont("Consolas", 10))
+        столбец.addWidget(self.поле_каналов, 1)
+
+        ряд = QHBoxLayout()
+        сохранить = QPushButton("Сохранить список")
+        вернуть = QPushButton("Вернуть как было")
+        ряд.addWidget(сохранить)
+        ряд.addWidget(вернуть)
+        ряд.addStretch(1)
+        self.каналы_ответ = QLabel("")
+        self.каналы_ответ.setStyleSheet("color: #666;")
+        ряд.addWidget(self.каналы_ответ)
+        столбец.addLayout(ряд)
+
+        сохранить.clicked.connect(self._сохранить_каналы)
+        вернуть.clicked.connect(self._перечитать_каналы)
+        self._перечитать_каналы()
+        return корень
+
+    def _перечитать_каналы(self) -> None:
+        self.поле_каналов.setPlainText(self.source.channels_text())
+        self.каналы_ответ.setText("")
+
+    def _сохранить_каналы(self) -> None:
+        разбор = parse_channels(self.поле_каналов.toPlainText())
+        if разбор.problems:
+            # Не сохраняем непонятое: молча принятая ошибка означает, что
+            # канал просто перестанет качаться, и заметят это через недели.
+            беды = "\n".join(f"строка {p.line_number}: {p.reason}" for p in разбор.problems)
+            QMessageBox.warning(self, "Не сохранил", f"Разобрать не удалось:\n\n{беды}")
+            self.каналы_ответ.setText("не сохранено — есть непонятые строки")
+            return
+        ответ = self.source.write_channels(format_channels(разбор.channels))
+        self.каналы_ответ.setText(f"{ответ} · каналов {len(разбор.channels)}")
+
+    # --- вкладка «Настройки» ------------------------------------------------
+
+    def _вкладка_настройки(self) -> QWidget:
+        корень = QWidget()
+        столбец = QVBoxLayout(корень)
+        столбец.setContentsMargins(16, 12, 16, 12)
+
+        форма = QFormLayout()
+        self.поле_качество = QComboBox()
+        for h in ALLOWED_HEIGHTS:
+            self.поле_качество.addItem(f"до {h}p", h)
+        self.поле_av1 = QCheckBox("Предпочитать AV1 (тот же вид, файл меньше)")
+        self.поле_субтитры = QCheckBox("Забирать субтитры")
+        self.поле_молчание = QSpinBox()
+        self.поле_молчание.setRange(60, 3600)
+        self.поле_молчание.setSuffix(" с")
+        self.поле_пауза_мин = QSpinBox()
+        self.поле_пауза_мин.setRange(0, 600)
+        self.поле_пауза_мин.setSuffix(" с")
+        self.поле_пауза_макс = QSpinBox()
+        self.поле_пауза_макс.setRange(0, 600)
+        self.поле_пауза_макс.setSuffix(" с")
+
+        форма.addRow("Качество:", self.поле_качество)
+        форма.addRow("", self.поле_av1)
+        форма.addRow("", self.поле_субтитры)
+        форма.addRow("Считать зависшим после:", self.поле_молчание)
+        форма.addRow("Пауза между роликами, от:", self.поле_пауза_мин)
+        форма.addRow("до:", self.поле_пауза_макс)
+        столбец.addLayout(форма)
+
+        подсказка = QLabel(
+            "Паузы между роликами берегут доступ: на потоке в тысячи запросов "
+            "YouTube начинает отвечать «подтвердите, что вы не бот». "
+            "Предел молчания должен быть заметно больше самой длинной паузы, "
+            "иначе живую выкачку будут убивать как зависшую."
+        )
+        подсказка.setWordWrap(True)
+        подсказка.setStyleSheet("color: #666;")
+        столбец.addWidget(подсказка)
+
+        ряд = QHBoxLayout()
+        сохранить = QPushButton("Сохранить настройки")
+        вернуть = QPushButton("Вернуть как было")
+        ряд.addWidget(сохранить)
+        ряд.addWidget(вернуть)
+        ряд.addStretch(1)
+        self.настройки_ответ = QLabel("")
+        self.настройки_ответ.setStyleSheet("color: #666;")
+        ряд.addWidget(self.настройки_ответ)
+        столбец.addLayout(ряд)
+        столбец.addStretch(1)
+
+        сохранить.clicked.connect(self._сохранить_настройки)
+        вернуть.clicked.connect(self._перечитать_настройки)
+        self._перечитать_настройки()
+        return корень
+
+    def _перечитать_настройки(self) -> None:
+        try:
+            config = parse_config(loads(self.source.config_text()))
+        except (ConfigError, Exception) as ошибка:  # noqa: BLE001
+            self.настройки_ответ.setText(f"настройки не читаются: {ошибка}")
+            return
+        self._config = config
+        self.поле_качество.setCurrentIndex(ALLOWED_HEIGHTS.index(config.height))
+        self.поле_av1.setChecked(config.prefer_av1)
+        self.поле_субтитры.setChecked(config.write_subs)
+        self.поле_молчание.setValue(int(config.limits.silence_limit))
+        self.поле_пауза_мин.setValue(config.limits.sleep_min)
+        self.поле_пауза_макс.setValue(config.limits.sleep_max)
+        self.настройки_ответ.setText("")
+
+    def _сохранить_настройки(self) -> None:
+        from dataclasses import replace
+
+        пределы = replace(
+            self._config.limits,
+            silence_limit=float(self.поле_молчание.value()),
+            sleep_min=self.поле_пауза_мин.value(),
+            sleep_max=self.поле_пауза_макс.value(),
+        )
+        новый = replace(
+            self._config,
+            height=self.поле_качество.currentData(),
+            prefer_av1=self.поле_av1.isChecked(),
+            write_subs=self.поле_субтитры.isChecked(),
+            limits=пределы,
+        )
+        текст = dump_config(новый)
+        try:
+            # Проверяем то, что собираемся записать: испорченные настройки
+            # оставят выкачку без запуска, а человека — без объяснения.
+            parse_config(loads(текст))
+        except (ConfigError, Exception) as ошибка:  # noqa: BLE001
+            QMessageBox.warning(self, "Не сохранил", str(ошибка))
+            self.настройки_ответ.setText("не сохранено")
+            return
+        self.настройки_ответ.setText(self.source.write_config(текст))
+        self._config = новый
+
+    # --- трей ---------------------------------------------------------------
+
+    def _собрать_трей(self) -> None:
+        self.трей = QSystemTrayIcon(нарисовать_значок(ЦВЕТА[RunState.IDLE]), self)
+        меню = QMenu()
+        показать = QAction("Показать окно", self)
+        пуск = QAction("Запустить выкачку", self)
+        стоп = QAction("Остановить выкачку", self)
+        выход = QAction("Выйти", self)
+        показать.triggered.connect(self._показаться)
+        пуск.triggered.connect(self._пуск)
+        стоп.triggered.connect(self._стоп)
+        выход.triggered.connect(self._выйти)
+        for пункт in (показать, пуск, стоп):
+            меню.addAction(пункт)
+        меню.addSeparator()
+        меню.addAction(выход)
+        self.трей.setContextMenu(меню)
+        self.трей.activated.connect(
+            lambda причина: self._показаться()
+            if причина == QSystemTrayIcon.ActivationReason.DoubleClick
+            else None
+        )
+        self.трей.show()
+
+    def _показаться(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _выйти(self) -> None:
+        self.трей.hide()
+        QApplication.instance().quit()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 — имя задано Qt
+        """Закрытие прячет окно, а не выходит.
+
+        Выкачка от этого не зависит вовсе — её ведёт задание. Но человек,
+        закрывший окно, ожидает найти программу в трее, а не гадать,
+        осталась ли она.
+        """
+        event.ignore()
+        self.hide()
+        if not self._предупредили_о_трее:
+            self.трей.showMessage(
+                "Архив YouTube",
+                "Окно свёрнуто в трей. Выкачка идёт сама и от окна не зависит.",
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
+            self._предупредили_о_трее = True
 
     # --- обновление ---------------------------------------------------------
 
@@ -131,6 +378,9 @@ class Window(QMainWindow):
         self.кнопка_пуск.setEnabled(not снимок.state.is_working)
         self.кнопка_стоп.setEnabled(снимок.state.is_working)
 
+        self.трей.setIcon(нарисовать_значок(ЦВЕТА[снимок.state]))
+        self.трей.setToolTip(f"Архив YouTube — {снимок.headline()}")
+
         текст = "\n".join(строки)
         if текст != self._последний_журнал:
             # Прокрутку держим внизу, только если человек и так смотрел вниз:
@@ -141,6 +391,21 @@ class Window(QMainWindow):
             if внизу:
                 полоса.setValue(полоса.maximum())
             self._последний_журнал = текст
+
+        self._обновить_таблицу()
+
+    def _обновить_таблицу(self) -> None:
+        строки = self.source.channel_stats()
+        if self.таблица.rowCount() != len(строки):
+            self.таблица.setRowCount(len(строки))
+        for номер, (имя, файлов, байт) in enumerate(строки):
+            значения = (имя, str(файлов), f"{байт / 1024**3:.2f} ГБ")
+            for столбец, значение in enumerate(значения):
+                ячейка = self.таблица.item(номер, столбец)
+                if ячейка is None:
+                    self.таблица.setItem(номер, столбец, QTableWidgetItem(значение))
+                elif ячейка.text() != значение:
+                    ячейка.setText(значение)
 
     # --- кнопки -------------------------------------------------------------
 
@@ -155,11 +420,14 @@ class Window(QMainWindow):
 
 def run(source: ArchiveSource, *, selftest: bool = False) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
+    # Без этого закрытие окна завершило бы программу вместе с треем.
+    app.setQuitOnLastWindowClosed(False)
     окно = Window(source)
     окно.show()
     if selftest:
         # Один оборот событий и выход: так сборка убеждается, что окно
         # хотя бы строится, не открывая ничего человеку.
         app.processEvents()
+        окно.трей.hide()
         return 0
     return app.exec()

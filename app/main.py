@@ -210,6 +210,8 @@ def cmd_gui(args) -> int:
         archive_path=archive,
         logs_dir=resolve(base, config.paths.logs),
         lock_path=archive.parent / "ytarchive.lock",
+        channels_path=resolve(base, config.paths.channels),
+        config_path=Path(args.config),
     )
     return run(source, selftest=args.selftest)
 

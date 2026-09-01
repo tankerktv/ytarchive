@@ -116,3 +116,35 @@ def test_настоящий_случай_2026_08_16_пробел_в_назван
     result = parse_channels("Уютный подвальчик|https://example.com/a\n")
     assert result.problems == ()
     assert result.channels[0].name == "Уютный подвальчик"
+
+
+# --- запись списка ----------------------------------------------------------
+
+
+def test_запись_и_чтение_списка_обратимы():
+    """Окно правит этот файл. Потеря канала при записи означала бы, что он
+    просто перестанет качаться — молча, пока кто-нибудь не заметит.
+    """
+    from core.channels import format_channels
+
+    исходный = parse_channels(
+        "SoyuzUS|https://www.youtube.com/@SoyuzUS/videos\n"
+        "Уютный подвальчик|https://www.youtube.com/channel/UCeemTTAKVjHucKYFmc8V3Ug/videos\n"
+    )
+    повторный = parse_channels(format_channels(исходный.channels))
+
+    assert повторный.channels == исходный.channels
+    assert повторный.problems == ()
+
+
+def test_пустой_список_записывается_без_поломки():
+    from core.channels import format_channels
+
+    текст = format_channels([])
+    assert parse_channels(текст).channels == ()
+
+
+def test_в_записанном_списке_остаётся_объяснение_формата():
+    from core.channels import format_channels
+
+    assert "Формат:" in format_channels([])

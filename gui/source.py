@@ -26,6 +26,8 @@ class ArchiveSource:
     archive_path: Path
     logs_dir: Path
     lock_path: Path
+    channels_path: Path
+    config_path: Path
     task_name: str = TASK_NAME
 
     def log_tail(self, lines: int) -> list[str]:
@@ -53,6 +55,62 @@ class ArchiveSource:
             return self.archive_path.read_text(encoding="utf-8")
         except OSError:
             return ""
+
+    def channels_text(self) -> str:
+        try:
+            return self.channels_path.read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    def write_channels(self, text: str) -> str:
+        """Записать список каналов. Сначала копия — файл правит человек,
+        и потерять его из-за нашей ошибки нельзя."""
+        return self._write(self.channels_path, text, "список каналов сохранён")
+
+    def config_text(self) -> str:
+        try:
+            return self.config_path.read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    def write_config(self, text: str) -> str:
+        return self._write(self.config_path, text, "настройки сохранены — вступят в силу со следующего прохода")
+
+    def _write(self, path: Path, text: str, успех: str) -> str:
+        try:
+            if path.exists():
+                path.with_suffix(path.suffix + ".bak").write_text(
+                    path.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+                )
+            path.write_text(text, encoding="utf-8", newline="\n")
+        except OSError as ошибка:
+            return f"не сохранилось: {ошибка}"
+        return успех
+
+    def channel_stats(self) -> list[tuple[str, int, int]]:
+        """Сколько файлов и байт лежит в папке каждого канала.
+
+        Считаем по файлам, а не по переписи YouTube: перепись требует сети
+        и занимает минуты, а окно должно отвечать сразу.
+        """
+        итог: list[tuple[str, int, int]] = []
+        try:
+            папки = sorted(p for p in self.base.iterdir() if p.is_dir())
+        except OSError:
+            return итог
+        for папка in папки:
+            if папка.name.startswith("_"):
+                continue  # служебные: _tools, _logs
+            файлов = байт = 0
+            for файл in папка.rglob("*"):
+                if файл.suffix.lower() in (".mkv", ".mp4", ".webm"):
+                    файлов += 1
+                    try:
+                        байт += файл.stat().st_size
+                    except OSError:
+                        pass
+            итог.append((папка.name, файлов, байт))
+        return итог
 
     def download_running(self) -> bool:
         """Идёт ли выкачка.

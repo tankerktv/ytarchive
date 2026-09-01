@@ -138,6 +138,55 @@ def parse_config(data: dict) -> Config:
     )
 
 
+def _toml_str(value: str) -> str:
+    """Строка в кавычках, с экранированием того, что его требует.
+
+    Пути на Windows содержат обратные слэши, а в TOML это знак экранирования.
+    Без обработки `C:\\Users\\...` превратился бы при следующем чтении
+    в мусор — молча, потому что файл остался бы формально годным.
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def dump_config(config: Config) -> str:
+    """Собрать текст настроек из значений.
+
+    Комментарии сохраняются: файл правит человек руками, и объяснения в нём
+    ценнее аккуратности. Обратимость проверена тестом — что записали,
+    то и прочитается.
+    """
+    langs = ", ".join(_toml_str(x) for x in config.sub_langs)
+    return f"""\
+# Настройки архиватора. Единственное обязательное — куда складывать.
+[paths]
+base = {_toml_str(config.paths.base)}
+# Остальные пути считаются от base, если не заданы абсолютными.
+channels = {_toml_str(config.paths.channels)}
+archive  = {_toml_str(config.paths.archive)}
+cookies  = {_toml_str(config.paths.cookies)}
+logs     = {_toml_str(config.paths.logs)}
+
+[download]
+height = {config.height}
+# AV1 при равном разрешении даёт заметно меньший файл.
+prefer_av1 = {str(config.prefer_av1).lower()}
+write_subs = {str(config.write_subs).lower()}
+sub_langs = [{langs}]
+# Быстрый проход: включать ТОЛЬКО когда архив собран целиком, иначе
+# он оборвётся на первом же скачанном ролике и остальное не заберёт.
+break_on_existing = {str(config.break_on_existing).lower()}
+
+[limits]
+# Молчание дольше этого считается зависанием. Должно быть заметно больше
+# паузы между роликами, иначе живую выкачку будут убивать.
+silence_limit = {config.limits.silence_limit:g}
+sleep_min = {config.limits.sleep_min}
+sleep_max = {config.limits.sleep_max}
+sleep_requests = {config.limits.sleep_requests}
+socket_timeout = {config.limits.socket_timeout}
+"""
+
+
 DEFAULT_CONFIG_TEXT = """\
 # Настройки архиватора. Единственное обязательное — куда складывать.
 [paths]
