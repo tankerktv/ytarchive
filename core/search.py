@@ -36,6 +36,7 @@ class Candidate:
     hits: int = 1
     videos: int | None = None
     seconds: float | None = None
+    avatar_url: str = ""
 
     @property
     def url(self) -> str:
@@ -58,6 +59,36 @@ class Candidate:
             f"{self.videos} роликов · {self.seconds / 3600:.1f} ч · "
             f"{низ / 1000**3:.0f}–{верх / 1000**3:.0f} ГБ"
         )
+
+
+#: Опознавательный знак аватара в выдаче yt-dlp. Проверено на живом канале:
+#: у канала девять картинок, и первые шесть — широкий баннер (2560×424).
+#: Взять первую попавшуюся значило бы показать в списке обрезок баннера.
+AVATAR_ID = "avatar_uncropped"
+
+
+def pick_avatar(thumbnails: list[dict]) -> str:
+    """Выбрать аватар канала среди его картинок.
+
+    Порядок предпочтений: явно помеченный аватар, затем любая квадратная —
+    самая крупная из них. Баннер не годится: в маленькой ячейке списка
+    от него останется полоска неба.
+    """
+    if not thumbnails:
+        return ""
+
+    for картинка in thumbnails:
+        if картинка.get("id") == AVATAR_ID and картинка.get("url"):
+            return str(картинка["url"])
+
+    квадратные = []
+    for картинка in thumbnails:
+        ширина, высота = картинка.get("width") or 0, картинка.get("height") or 0
+        if ширина and высота and abs(ширина - высота) <= max(2, ширина * 0.05):
+            квадратные.append((ширина, str(картинка.get("url") or "")))
+
+    квадратные = [(ш, u) for ш, u in квадратные if u]
+    return max(квадратные)[1] if квадратные else ""
 
 
 def parse_search_output(lines: list[str]) -> list[Candidate]:

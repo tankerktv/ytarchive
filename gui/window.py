@@ -13,8 +13,9 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -40,7 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.archive import parse_archive
-from core.channels import format_channels, parse_channels
+from core.channels import format_channels, move_channel, parse_channels, remove_channel
 from core.config import ConfigError, dump_config, loads, parse_config
 from core.status import RunState, build_status
 from core.ytdlp_args import ALLOWED_HEIGHTS
@@ -107,27 +108,76 @@ class ПоискКаналов(QThread):
         self._бросить = True
 
     def run(self) -> None:
-        from runner.search import measure_all, search_channels
+        from runner.avatars import ensure_avatar, fetch_avatar_url
+        from runner.search import measure_channel, search_channels
 
         кандидаты, ответ = search_channels(
             self.запрос, self.source.settings, ytdlp=self.source.ytdlp
         )
         self.найдено.emit(кандидаты, ответ)
-        if кандидаты and not self._бросить:
-            measure_all(
-                кандидаты,
-                self.source.settings,
-                ytdlp=self.source.ytdlp,
-                on_measured=lambda н, к, о: self.измерено.emit(н, к, о),
-                stop=lambda: self._бросить,
+
+        for номер, кандидат in enumerate(кандидаты):
+            if self._бросить:
+                break
+            # Логотип берём первым: он приходит быстро и сразу делает список
+            # узнаваемым, пока перепись ещё считает объём.
+            адрес = fetch_avatar_url(кандидат, self.source.settings, ytdlp=self.source.ytdlp)
+            if адрес:
+                ensure_avatar(self.source.avatars_dir, кандидат.channel_id, адрес)
+                self.измерено.emit(номер, replace(кандидат, avatar_url=адрес), "логотип")
+            if self._бросить:
+                break
+            измеренный, ответ_меры = measure_channel(
+                replace(кандидат, avatar_url=адрес), self.source.settings, ytdlp=self.source.ytdlp
             )
+            self.измерено.emit(номер, измеренный, ответ_меры)
+
         self.закончено.emit()
 
 
-class Window(QMainWindow):
-    def __init__(self, source: ArchiveSource) -> None:
+class ЗагрузкаЛоготипов(QThread):
+    """Логотипы уже добавленных каналов — разово, при открытии окна.
+
+    Отдельно от поиска: те каналы уже в списке, искать их незачем, а
+    картинки для них ещё не скачаны.
+    """
+
+    готово = Signal()
+
+    def __init__(self, source: ArchiveSource, каналы: list) -> None:
         super().__init__()
         self.source = source
+        self.каналы = list(каналы)
+
+    def run(self) -> None:
+        from core.search import Candidate
+        from runner.avatars import cached_avatar, ensure_avatar, fetch_avatar_url
+
+        for канал in self.каналы:
+            опознание = [
+                к for к in канал.url.rstrip("/").split("/") if к.startswith("UC") and len(к) == 24
+            ]
+            if not опознание:
+                continue  # канал задан хендлом — опознать по адресу нечем
+            идентификатор = опознание[0]
+            if cached_avatar(self.source.avatars_dir, идентификатор) is not None:
+                continue  # уже лежит: аватары не меняются месяцами
+            кандидат = Candidate(name=канал.name, channel_id=идентификатор)
+            адрес = fetch_avatar_url(кандидат, self.source.settings, ytdlp=self.source.ytdlp)
+            if адрес:
+                ensure_avatar(self.source.avatars_dir, идентификатор, адрес)
+        self.готово.emit()
+
+
+class Window(QMainWindow):
+    def __init__(self, source: ArchiveSource, *, фоновые: bool = True) -> None:
+        super().__init__()
+        self.source = source
+        # Qt обрывает процесс, если поток жив в момент уничтожения окна.
+        # В самопроверке окно строится и тут же гибнет, поэтому фоновую
+        # работу там не начинаем вовсе — иначе сборка падала бы без
+        # единой строки объяснения, как и случилось.
+        self._фоновые = фоновые
         self.setWindowTitle("Архив YouTube")
         self.resize(940, 640)
 
@@ -140,6 +190,12 @@ class Window(QMainWindow):
         self._последний_журнал = ""
         self._предупредили_о_трее = False
         self._собрать_трей()
+
+        self._логотипы = None
+        if self._фоновые and self._каналы:
+            self._логотипы = ЗагрузкаЛоготипов(self.source, self._каналы)
+            self._логотипы.готово.connect(self._перечитать_каналы)
+            self._логотипы.start()
 
         self.таймер = QTimer(self)
         self.таймер.timeout.connect(self.обновить)
@@ -224,12 +280,14 @@ class Window(QMainWindow):
         self.поиск_ответ.setStyleSheet("color: #666;")
         столбец.addWidget(self.поиск_ответ)
 
-        self.находки = QTableWidget(0, 3)
-        self.находки.setHorizontalHeaderLabels(["Канал", "Объём", "Влезет"])
+        self.находки = QTableWidget(0, 4)
+        self.находки.setHorizontalHeaderLabels(["", "Канал", "Объём", "Влезет"])
+        self.находки.setIconSize(QSize(32, 32))
         self.находки.horizontalHeader().setStretchLastSection(True)
-        self.находки.setColumnWidth(0, 300)
-        self.находки.setColumnWidth(1, 280)
-        self.находки.setMaximumHeight(150)
+        self.находки.setColumnWidth(0, 44)
+        self.находки.setColumnWidth(1, 260)
+        self.находки.setColumnWidth(2, 260)
+        self.находки.setMaximumHeight(170)
         self.находки.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         столбец.addWidget(self.находки)
@@ -253,26 +311,88 @@ class Window(QMainWindow):
         self.таблица.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         столбец.addWidget(self.таблица)
 
-        столбец.addWidget(QLabel("Список каналов — по строке на канал, «Название|адрес»:"))
-        self.поле_каналов = QPlainTextEdit()
-        self.поле_каналов.setFont(QFont("Consolas", 10))
-        столбец.addWidget(self.поле_каналов, 1)
+        столбец.addWidget(QLabel(
+            "Список каналов. Порядок здесь — это порядок обхода: верхний "
+            "забирается первым."
+        ))
+        ряд_списка = QHBoxLayout()
+        self.список_каналов = QTableWidget(0, 4)
+        self.список_каналов.setHorizontalHeaderLabels(["", "Канал", "Файлов", "Объём"])
+        self.список_каналов.horizontalHeader().setStretchLastSection(True)
+        self.список_каналов.setColumnWidth(0, 52)
+        self.список_каналов.setColumnWidth(1, 330)
+        self.список_каналов.setColumnWidth(2, 80)
+        self.список_каналов.verticalHeader().setVisible(False)
+        self.список_каналов.setIconSize(QSize(40, 40))
+        self.список_каналов.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.список_каналов.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.список_каналов.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        ряд_списка.addWidget(self.список_каналов, 1)
 
-        ряд = QHBoxLayout()
-        сохранить = QPushButton("Сохранить список")
-        вернуть = QPushButton("Вернуть как было")
-        ряд.addWidget(сохранить)
-        ряд.addWidget(вернуть)
-        ряд.addStretch(1)
+        кнопки = QVBoxLayout()
+        self.кнопка_вверх = QPushButton("↑ Выше")
+        self.кнопка_вниз = QPushButton("↓ Ниже")
+        self.кнопка_убрать = QPushButton("Убрать")
+        for к in (self.кнопка_вверх, self.кнопка_вниз, self.кнопка_убрать):
+            к.setEnabled(False)
+            кнопки.addWidget(к)
+        кнопки.addStretch(1)
+        ряд_списка.addLayout(кнопки)
+        столбец.addLayout(ряд_списка, 1)
+
         self.каналы_ответ = QLabel("")
         self.каналы_ответ.setStyleSheet("color: #666;")
-        ряд.addWidget(self.каналы_ответ)
-        столбец.addLayout(ряд)
+        self.каналы_ответ.setWordWrap(True)
+        столбец.addWidget(self.каналы_ответ)
 
-        сохранить.clicked.connect(self._сохранить_каналы)
-        вернуть.clicked.connect(self._перечитать_каналы)
+        self.кнопка_вверх.clicked.connect(lambda: self._переставить(-1))
+        self.кнопка_вниз.clicked.connect(lambda: self._переставить(+1))
+        self.кнопка_убрать.clicked.connect(self._убрать_канал)
+        self.список_каналов.itemSelectionChanged.connect(self._выбор_канала)
+        self._каналы: list = []
         self._перечитать_каналы()
         return корень
+
+    # --- порядок и удаление -------------------------------------------------
+
+    def _выбор_канала(self) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        есть = bool(строки)
+        номер = строки[0].row() if есть else -1
+        self.кнопка_вверх.setEnabled(есть and номер > 0)
+        self.кнопка_вниз.setEnabled(есть and номер < len(self._каналы) - 1)
+        self.кнопка_убрать.setEnabled(есть)
+
+    def _переставить(self, куда: int) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        if not строки:
+            return
+        номер = строки[0].row()
+        стало = move_channel(self._каналы, номер, куда)
+        if стало == tuple(self._каналы):
+            return
+        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)))
+        self._перечитать_каналы()
+        self.список_каналов.selectRow(номер + куда)
+
+    def _убрать_канал(self) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        if not строки:
+            return
+        номер = строки[0].row()
+        канал = self._каналы[номер]
+        ответ = QMessageBox.question(
+            self,
+            "Убрать канал",
+            f"Убрать «{канал.name}» из списка?\n\n"
+            "Скачанное останется на диске и в учёте — канал уходит из очереди, "
+            "а не из архива. Вернёте обратно — заново качать не станет.",
+        )
+        if ответ != QMessageBox.StandardButton.Yes:
+            return
+        стало = remove_channel(self._каналы, номер)
+        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)))
+        self._перечитать_каналы()
 
     def _искать(self) -> None:
         запрос = self.поле_поиска.text().strip()
@@ -315,11 +435,21 @@ class Window(QMainWindow):
         # Прямо говорим, что неизвестно: «да» по неизмеренному каналу —
         # это обещание, которого мы дать не можем.
         подпись = {None: "…", True: "да", False: "НЕ ВЛЕЗЕТ"}[влезет]
-        for столбец, значение in enumerate((кандидат.name, кандидат.describe(), подпись)):
+
+        значок = QTableWidgetItem("")
+        from runner.avatars import cached_avatar
+
+        путь = cached_avatar(self.source.avatars_dir, кандидат.channel_id)
+        if путь is not None:
+            значок.setIcon(QIcon(str(путь)))
+        self.находки.setItem(номер, 0, значок)
+        self.находки.setRowHeight(номер, 38)
+
+        for сдвиг, значение in enumerate((кандидат.name, кандидат.describe(), подпись)):
             ячейка = QTableWidgetItem(значение)
-            if столбец == 2 and влезет is False:
+            if сдвиг == 2 and влезет is False:
                 ячейка.setForeground(QColor("#c62828"))
-            self.находки.setItem(номер, столбец, ячейка)
+            self.находки.setItem(номер, сдвиг + 1, ячейка)
 
     def _выбор_находки(self) -> None:
         строки = self.находки.selectionModel().selectedRows()
@@ -345,20 +475,32 @@ class Window(QMainWindow):
         self._перечитать_каналы()
 
     def _перечитать_каналы(self) -> None:
-        self.поле_каналов.setPlainText(self.source.channels_text())
-        self.каналы_ответ.setText("")
+        разбор = parse_channels(self.source.channels_text())
+        self._каналы = list(разбор.channels)
 
-    def _сохранить_каналы(self) -> None:
-        разбор = parse_channels(self.поле_каналов.toPlainText())
+        # Непонятые строки не прячем: иначе человек не узнает, что канал
+        # выпал из очереди, а перезапись файла из окна их бы и вовсе стёрла.
         if разбор.problems:
-            # Не сохраняем непонятое: молча принятая ошибка означает, что
-            # канал просто перестанет качаться, и заметят это через недели.
-            беды = "\n".join(f"строка {p.line_number}: {p.reason}" for p in разбор.problems)
-            QMessageBox.warning(self, "Не сохранил", f"Разобрать не удалось:\n\n{беды}")
-            self.каналы_ответ.setText("не сохранено — есть непонятые строки")
-            return
-        ответ = self.source.write_channels(format_channels(разбор.channels))
-        self.каналы_ответ.setText(f"{ответ} · каналов {len(разбор.channels)}")
+            беды = "; ".join(f"строка {p.line_number}: {p.reason}" for p in разбор.problems)
+            self.каналы_ответ.setText(f"в файле есть непонятые строки — {беды}")
+
+        по_папкам = {имя: (файлов, байт) for имя, файлов, байт in self.source.channel_stats()}
+        self.список_каналов.setRowCount(len(self._каналы))
+        for номер, канал in enumerate(self._каналы):
+            файлов, байт = по_папкам.get(канал.name, (0, 0))
+            значок = QTableWidgetItem("")
+            путь = self.source.avatar(канал.name)
+            if путь is not None:
+                значок.setIcon(QIcon(str(путь)))
+            self.список_каналов.setItem(номер, 0, значок)
+            self.список_каналов.setItem(номер, 1, QTableWidgetItem(канал.name))
+            self.список_каналов.setItem(номер, 2, QTableWidgetItem(str(файлов) if файлов else "—"))
+            self.список_каналов.setItem(
+                номер, 3, QTableWidgetItem(f"{байт / 1024**3:.1f} ГБ" if байт else "—")
+            )
+        for номер in range(len(self._каналы)):
+            self.список_каналов.setRowHeight(номер, 46)
+        self._выбор_канала()
 
     # --- вкладка «Настройки» ------------------------------------------------
 
@@ -491,7 +633,22 @@ class Window(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def _дождаться_потоков(self) -> None:
+        """Дождаться фоновой работы перед уходом.
+
+        Живой поток в момент уничтожения окна Qt считает ошибкой и
+        обрывает процесс — без сообщения, что особенно неприятно.
+        """
+        for поток in (self._поиск, self._логотипы):
+            if поток is None:
+                continue
+            if hasattr(поток, "бросить"):
+                поток.бросить()
+            if поток.isRunning():
+                поток.wait(5000)
+
     def _выйти(self) -> None:
+        self._дождаться_потоков()
         self.трей.hide()
         QApplication.instance().quit()
 
@@ -621,12 +778,13 @@ def run(source: ArchiveSource, *, selftest: bool = False) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     # Без этого закрытие окна завершило бы программу вместе с треем.
     app.setQuitOnLastWindowClosed(False)
-    окно = Window(source)
+    окно = Window(source, фоновые=not selftest)
     окно.show()
     if selftest:
         # Один оборот событий и выход: так сборка убеждается, что окно
         # хотя бы строится, не открывая ничего человеку.
         app.processEvents()
+        окно._дождаться_потоков()
         окно.трей.hide()
         return 0
     return app.exec()

@@ -34,6 +34,25 @@ class ArchiveSource:
     ytdlp: tuple[str, ...] = ("yt-dlp",)
     task_name: str = TASK_NAME
 
+    def avatar(self, channel_name: str):
+        """Логотип канала из кэша. В сеть не ходим — это зовётся из отрисовки,
+        а она случается каждые две секунды."""
+        from core.channels import parse_channels
+        from runner.avatars import cached_avatar
+
+        for канал in parse_channels(self.channels_text()).channels:
+            if канал.name == channel_name:
+                опознание = канал.url.rstrip("/").split("/")
+                for кусок in опознание:
+                    if кусок.startswith("UC") and len(кусок) == 24:
+                        return cached_avatar(self.avatars_dir, кусок)
+                return cached_avatar(self.avatars_dir, channel_name)
+        return None
+
+    @property
+    def avatars_dir(self) -> Path:
+        return self.channels_path.parent / "avatars"
+
     def free_bytes(self) -> int:
         """Сколько места на диске архива. Ноль значит «не смогли узнать» —
         и тогда лучше не утверждать, что канал влезет."""

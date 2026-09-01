@@ -142,3 +142,46 @@ def test_судим_по_верхней_границе():
 def test_на_пустом_диске_не_влезает_ничего(свободно):
     кандидат = with_measurement(Candidate("X", "UC" + "a" * 22), [100 * 3600])
     assert fits(кандидат, free_bytes=свободно) is False
+
+
+# --- аватар канала ----------------------------------------------------------
+
+
+def test_аватар_берётся_по_метке():
+    """Проверено на живом канале: из девяти картинок первые шесть — широкий
+    баннер (2560x424), и только у одной метка avatar_uncropped.
+    """
+    from core.search import pick_avatar
+
+    картинки = [
+        {"id": "0", "width": 1060, "height": 175, "url": "баннер"},
+        {"id": "5", "width": 2560, "height": 424, "url": "баннер-большой"},
+        {"id": "7", "width": 900, "height": 900, "url": "квадрат"},
+        {"id": "avatar_uncropped", "width": 0, "height": 0, "url": "аватар"},
+    ]
+    assert pick_avatar(картинки) == "аватар"
+
+
+def test_без_метки_берётся_самая_крупная_квадратная():
+    from core.search import pick_avatar
+
+    картинки = [
+        {"id": "0", "width": 2560, "height": 424, "url": "баннер"},
+        {"id": "7", "width": 176, "height": 176, "url": "мелкий"},
+        {"id": "8", "width": 900, "height": 900, "url": "крупный"},
+    ]
+    assert pick_avatar(картинки) == "крупный"
+
+
+def test_баннер_в_аватары_не_годится():
+    """В маленькой ячейке списка от баннера осталась бы полоска неба."""
+    from core.search import pick_avatar
+
+    assert pick_avatar([{"id": "0", "width": 2560, "height": 424, "url": "баннер"}]) == ""
+
+
+def test_нет_картинок_нет_аватара():
+    from core.search import pick_avatar
+
+    assert pick_avatar([]) == ""
+    assert pick_avatar([{"id": "x", "width": 0, "height": 0}]) == ""

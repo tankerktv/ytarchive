@@ -148,3 +148,78 @@ def test_в_записанном_списке_остаётся_объяснен�
     from core.channels import format_channels
 
     assert "Формат:" in format_channels([])
+
+
+# --- порядок и удаление -----------------------------------------------------
+
+
+def test_перестановка_меняет_соседей():
+    """Порядок списка — это порядок обхода: первый канал забирается первым.
+    Значит перестановка и есть управление приоритетом.
+    """
+    from core.channels import move_channel
+
+    исходный = parse_channels(
+        "Первый|https://example.com/a\nВторой|https://example.com/b\n"
+    ).channels
+    стало = move_channel(исходный, 1, -1)
+
+    assert [c.name for c in стало] == ["Второй", "Первый"]
+
+
+def test_вверх_с_первого_места_ничего_не_меняет():
+    # «Дальше некуда» — не ошибка, а обычное дело при щелчке по кнопке.
+    from core.channels import move_channel
+
+    было = parse_channels("А|https://example.com/a\nБ|https://example.com/b\n").channels
+    assert move_channel(было, 0, -1) == было
+
+
+def test_вниз_с_последнего_места_ничего_не_меняет():
+    from core.channels import move_channel
+
+    было = parse_channels("А|https://example.com/a\nБ|https://example.com/b\n").channels
+    assert move_channel(было, 1, +1) == было
+
+
+def test_перестановка_за_пределами_списка_безопасна():
+    from core.channels import move_channel
+
+    было = parse_channels("А|https://example.com/a\n").channels
+    assert move_channel(было, 5, -1) == было
+    assert move_channel(было, -1, +1) == было
+
+
+def test_удаление_убирает_только_один():
+    from core.channels import remove_channel
+
+    было = parse_channels(
+        "А|https://example.com/a\nБ|https://example.com/b\nВ|https://example.com/c\n"
+    ).channels
+    стало = remove_channel(было, 1)
+
+    assert [c.name for c in стало] == ["А", "В"]
+
+
+def test_удаление_за_пределами_списка_безопасно():
+    from core.channels import remove_channel
+
+    было = parse_channels("А|https://example.com/a\n").channels
+    assert remove_channel(было, 7) == было
+
+
+def test_после_перестановки_список_остаётся_записываемым():
+    """Порядок правится в окне и сразу уезжает в файл. Если после
+    перестановки запись сломается, человек потеряет весь список.
+    """
+    from core.channels import format_channels, move_channel
+
+    было = parse_channels(
+        "SoyuzUS|https://www.youtube.com/@SoyuzUS/videos\n"
+        "Уютный подвальчик|https://www.youtube.com/channel/UCeemTTAKVjHucKYFmc8V3Ug/videos\n"
+    ).channels
+    стало = move_channel(было, 0, +1)
+    снова = parse_channels(format_channels(стало))
+
+    assert снова.problems == ()
+    assert [c.name for c in снова.channels] == ["Уютный подвальчик", "SoyuzUS"]

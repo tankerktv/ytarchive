@@ -61,6 +61,43 @@ def format_channels(channels: tuple[Channel, ...] | list[Channel]) -> str:
     return HEADER + "\n".join(строки) + ("\n" if строки else "")
 
 
+def move_channel(
+    channels: tuple[Channel, ...] | list[Channel], index: int, delta: int
+) -> tuple[Channel, ...]:
+    """Переставить канал в списке.
+
+    Порядок списка — это порядок обхода: очередь строится по нему, и первый
+    канал забирается первым. Значит перестановка и есть управление
+    приоритетом, отдельного поля для него заводить незачем.
+
+    Выход за край — не ошибка, а «дальше некуда»: список возвращается как был.
+    """
+    список = list(channels)
+    если_некуда = tuple(список)
+    if not 0 <= index < len(список):
+        return если_некуда
+    куда = index + delta
+    if not 0 <= куда < len(список):
+        return если_некуда
+    список[index], список[куда] = список[куда], список[index]
+    return tuple(список)
+
+
+def remove_channel(
+    channels: tuple[Channel, ...] | list[Channel], index: int
+) -> tuple[Channel, ...]:
+    """Убрать канал из списка.
+
+    Скачанное при этом остаётся на диске и в учёте — убираем из очереди,
+    а не из архива. Вернуть канал обратно можно, и заново он не полезет.
+    """
+    список = list(channels)
+    if not 0 <= index < len(список):
+        return tuple(список)
+    del список[index]
+    return tuple(список)
+
+
 def parse_channels(text: str) -> ParseResult:
     """Разобрать список каналов.
 
