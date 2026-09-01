@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import itertools
 import subprocess
 import time
 from dataclasses import dataclass
@@ -174,6 +175,76 @@ class ArchiveSource:
                 )
                 return enumerate_channel(канал, config, should_stop=should_stop)
         return Listing()
+
+    # --- рабочая папка ------------------------------------------------------
+
+    @property
+    def archive_relative(self) -> str:
+        """Где лежит учёт внутри рабочей папки — например `_tools/downloaded.txt`.
+
+        Нужно, чтобы предсказать судьбу учёта в ДРУГОЙ папке, ещё не став ею.
+        """
+        try:
+            return self.archive_path.relative_to(self.base).as_posix()
+        except ValueError:
+            # Учёт вынесен наружу рабочей папки — законно, и тогда смена
+            # папки его не касается.
+            return ""
+
+    def check_folder(self, path: Path):
+        """Осмотреть папку под архив: годится ли и чем грозит.
+
+        Факты собираются здесь, решение принимает `core.workdir` — так его
+        можно проверить без дисков и без прав.
+        """
+        from core.archive import parse_archive
+        from core.workdir import judge_folder
+
+        путь = Path(path)
+        существует = путь.exists()
+        каталог = путь.is_dir() if существует else False
+
+        учёт = (путь / self.archive_relative) if self.archive_relative else None
+        есть_учёт = bool(учёт and учёт.is_file())
+        сколько = 0
+        if есть_учёт:
+            try:
+                сколько = len(parse_archive(учёт.read_text(encoding="utf-8")).video_ids)
+            except OSError:
+                есть_учёт = False
+
+        внутри = 0
+        if каталог:
+            try:
+                # Считать всё дерево незачем: хватает знания «пусто или нет».
+                внутри = sum(1 for _ in itertools.islice(путь.iterdir(), 1))
+            except OSError:
+                внутри = 0
+
+        return judge_folder(
+            exists=существует,
+            is_dir=каталог,
+            writable=self._writable(путь) if каталог else False,
+            has_archive=есть_учёт,
+            archive_count=сколько,
+            files_inside=внутри,
+            same_as_now=каталог and путь.resolve() == self.base.resolve(),
+        )
+
+    @staticmethod
+    def _writable(путь: Path) -> bool:
+        """Проверяем записью, а не правами: на сетевых дисках и в OneDrive
+        права говорят одно, а запись кончается отказом."""
+        проба = путь / ".ytarchive-проба"
+        try:
+            проба.write_text("", encoding="utf-8")
+        except OSError:
+            return False
+        try:
+            проба.unlink()
+        except OSError:
+            pass
+        return True
 
     def config_text(self) -> str:
         try:

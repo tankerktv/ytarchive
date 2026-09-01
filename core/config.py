@@ -169,6 +169,8 @@ channels = {_toml_str(config.paths.channels)}
 archive  = {_toml_str(config.paths.archive)}
 cookies  = {_toml_str(config.paths.cookies)}
 logs     = {_toml_str(config.paths.logs)}
+# Ролики, снятые галочкой в окне выбора. Не путать с archive: там скачанное.
+excluded = {_toml_str(config.paths.excluded)}
 
 [download]
 height = {config.height}

@@ -537,6 +537,19 @@ class Window(QMainWindow):
         столбец.setContentsMargins(16, 12, 16, 12)
 
         форма = QFormLayout()
+
+        ряд_папки = QHBoxLayout()
+        self.поле_папка = QLineEdit()
+        # Только чтение: папку выбирают в проводнике, а не набирают руками.
+        # Опечатка здесь означает архив, начатый с нуля.
+        self.поле_папка.setReadOnly(True)
+        self.кнопка_обзор = QPushButton("Обзор…")
+        ряд_папки.addWidget(self.поле_папка, 1)
+        ряд_папки.addWidget(self.кнопка_обзор)
+        обёртка = QWidget()
+        обёртка.setLayout(ряд_папки)
+        форма.addRow("Рабочая папка:", обёртка)
+
         self.поле_качество = QComboBox()
         for h in ALLOWED_HEIGHTS:
             self.поле_качество.addItem(f"до {h}p", h)
@@ -559,6 +572,15 @@ class Window(QMainWindow):
         форма.addRow("Пауза между роликами, от:", self.поле_пауза_мин)
         форма.addRow("до:", self.поле_пауза_макс)
         столбец.addLayout(форма)
+
+        про_папку = QLabel(
+            "Рабочая папка — это и склад роликов, и учёт скачанного. Смена "
+            "папки ничего не переносит: новая папка начинается с того, что "
+            "в ней уже лежит. Выкачка перейдёт на неё со следующего прохода."
+        )
+        про_папку.setWordWrap(True)
+        про_папку.setStyleSheet("color: #666;")
+        столбец.addWidget(про_папку)
 
         подсказка = QLabel(
             "Паузы между роликами берегут доступ: на потоке в тысячи запросов "
@@ -584,8 +606,41 @@ class Window(QMainWindow):
 
         сохранить.clicked.connect(self._сохранить_настройки)
         вернуть.clicked.connect(self._перечитать_настройки)
+        self.кнопка_обзор.clicked.connect(self._выбрать_папку)
         self._перечитать_настройки()
         return корень
+
+    def _выбрать_папку(self) -> None:
+        """Выбрать рабочую папку. Согласие спрашивается словами о последствиях:
+        учёт скачанного лежит внутри папки, и пустая означает всё заново.
+        """
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QFileDialog
+
+        выбор = QFileDialog.getExistingDirectory(
+            self, "Куда складывать архив", self.поле_папка.text()
+        )
+        if not выбор:
+            return
+
+        осмотр = self.source.check_folder(Path(выбор))
+        if not осмотр.ok:
+            QMessageBox.warning(self, "Эта папка не подойдёт", осмотр.reason)
+            return
+
+        ответ = QMessageBox.question(
+            self,
+            "Сменить рабочую папку?",
+            f"{выбор}\n\n{осмотр.warning}\n\nСменить?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ответ != QMessageBox.StandardButton.Yes:
+            return
+
+        self.поле_папка.setText(str(Path(выбор)))
+        self.настройки_ответ.setText("папка сменится при сохранении")
 
     def _перечитать_настройки(self) -> None:
         try:
@@ -594,6 +649,7 @@ class Window(QMainWindow):
             self.настройки_ответ.setText(f"настройки не читаются: {ошибка}")
             return
         self._config = config
+        self.поле_папка.setText(config.paths.base)
         self.поле_качество.setCurrentIndex(ALLOWED_HEIGHTS.index(config.height))
         self.поле_av1.setChecked(config.prefer_av1)
         self.поле_субтитры.setChecked(config.write_subs)
@@ -611,8 +667,11 @@ class Window(QMainWindow):
             sleep_min=self.поле_пауза_мин.value(),
             sleep_max=self.поле_пауза_макс.value(),
         )
+        пути = replace(self._config.paths, base=self.поле_папка.text())
+        сменилась = пути.base != self._config.paths.base
         новый = replace(
             self._config,
+            paths=пути,
             height=self.поле_качество.currentData(),
             prefer_av1=self.поле_av1.isChecked(),
             write_subs=self.поле_субтитры.isChecked(),
@@ -627,8 +686,19 @@ class Window(QMainWindow):
             QMessageBox.warning(self, "Не сохранил", str(ошибка))
             self.настройки_ответ.setText("не сохранено")
             return
-        self.настройки_ответ.setText(self.source.write_config(текст))
+        ответ = self.source.write_config(текст)
         self._config = новый
+        if сменилась and not ответ.startswith("не сохранилось"):
+            # Окно читало старую папку при запуске и продолжит её показывать:
+            # умолчать об этом значит показывать вчерашние числа как сегодняшние.
+            ответ = "папка сменена; окно покажет новую после перезапуска"
+            QMessageBox.information(
+                self,
+                "Рабочая папка сменена",
+                "Выкачка перейдёт на новую папку со следующего прохода.\n\n"
+                "Это окно показывает прежнюю папку, пока его не перезапустить.",
+            )
+        self.настройки_ответ.setText(ответ)
 
     # --- трей ---------------------------------------------------------------
 
