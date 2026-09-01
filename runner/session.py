@@ -75,20 +75,26 @@ def probe_channel(
     которую можно показать человеку без перевода.
     """
     решение = None
+    диагноз = None
     for attempt in range(1, config.retries.max_attempts + 1):
         args = build_probe_args(config.settings, channel.url)
         outcome = run_watched([*config.ytdlp, *args], config.probe_watchdog)
         result = diagnose(outcome.text, outcome.exit_code if outcome.exit_code is not None else 1)
+        диагноз = result.diagnosis
         решение = decide_after_probe(result.diagnosis, attempt, config.retries)
 
         if on_event is not None:
-            on_event(f"{channel.name}: проверка — {result.diagnosis.value}")
+            # Подробность обязательна: без неё по журналу нельзя понять,
+            # что именно ответил yt-dlp, и разбираться приходится заново,
+            # воспроизводя сбой руками. Проверено на себе 30.08.
+            хвост = f" ({result.detail[:120]})" if result.detail else ""
+            on_event(f"{channel.name}: проверка — {result.diagnosis.value}{хвост}")
 
         if решение.action is not Action.RETRY:
-            return решение
+            return решение, диагноз
         sleep(решение.delay)
 
-    return решение
+    return решение, диагноз
 
 
 def download_channel(
@@ -150,12 +156,25 @@ def run_session(
 
     results: list[ChannelResult] = []
     for channel in parsed.channels:
-        решение = probe_channel(channel, config, on_event=on_message, sleep=sleep)
+        решение, диагноз = probe_channel(channel, config, on_event=on_message, sleep=sleep)
         if решение is None or решение.action is Action.STOP:
             причина = решение.reason if решение else "проверка не дала ответа"
             results.append(ChannelResult(channel=channel.name, stopped_reason=причина))
             if on_message is not None:
                 on_message(f"{channel.name}: остановлено — {причина}")
+
+            # Общая беда — сеть, куки, устаревший yt-dlp — одинакова для всех
+            # каналов. Перебирать остальные значит потратить минуты и получить
+            # четыре одинаковых записи вместо одной внятной.
+            if диагноз is not None and диагноз.is_global:
+                оставшиеся = [c for c in parsed.channels if c.name != channel.name
+                              and not any(r.channel == c.name for r in results)]
+                if оставшиеся and on_message is not None:
+                    on_message(
+                        f"беда общая для всех каналов — остальные "
+                        f"({len(оставшиеся)}) не проверяю, ждём следующего прохода"
+                    )
+                break
             continue
 
         скачано, упало = download_channel(channel, config, on_event=on_event)

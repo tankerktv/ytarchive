@@ -141,3 +141,19 @@ def test_настоящий_случай_2026_08_29_ложная_проверк�
 
     assert итог.diagnosis is Diagnosis.TAB_AUTHCHECK
     assert итог.diagnosis.is_transient
+
+
+def test_общие_беды_отделены_от_частных():
+    """Сеть либо есть, либо нет — убедившись на первом канале, перебирать
+    остальные бессмысленно. 30.08 это стоило шести минут и четырёх
+    одинаковых записей «остановлено» вместо одной внятной.
+    """
+    assert Diagnosis.NETWORK.is_global
+    assert Diagnosis.LOGIN_REQUIRED.is_global
+    assert Diagnosis.NO_JS_RUNTIME.is_global
+    assert Diagnosis.EMPTY_LISTING.is_global
+
+    # А эти могут быть особенностью конкретного канала.
+    assert not Diagnosis.TAB_AUTHCHECK.is_global
+    assert not Diagnosis.UNKNOWN.is_global
+    assert not Diagnosis.OK.is_global

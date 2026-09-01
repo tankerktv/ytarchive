@@ -35,6 +35,24 @@ class Diagnosis(Enum):
         return self is Diagnosis.OK
 
     @property
+    def is_global(self) -> bool:
+        """Беда общая для всех каналов, а не этого одного.
+
+        Сеть либо есть, либо нет: убедившись на первом канале, перебирать
+        остальные бессмысленно. 30.08 это стоило шести минут и четырёх
+        одинаковых записей «остановлено» вместо одной внятной.
+
+        Отсутствие входа и устаревший yt-dlp — тоже общие: они про нашу
+        сторону, а не про конкретный канал.
+        """
+        return self in (
+            Diagnosis.NETWORK,
+            Diagnosis.LOGIN_REQUIRED,
+            Diagnosis.NO_JS_RUNTIME,
+            Diagnosis.EMPTY_LISTING,
+        )
+
+    @property
     def is_transient(self) -> bool:
         """Пройдёт ли само со временем.
 
