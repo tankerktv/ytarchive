@@ -16,6 +16,15 @@ def настройки(**разделы):
     return основа
 
 
+def test_список_исключений_живёт_отдельно_от_архива():
+    """Попади снятые галочки в архив, вернуть ролик было бы нечем:
+    он числился бы скачанным.
+    """
+    config = parse_config(настройки())
+    assert config.paths.excluded == "_tools/excluded.txt"
+    assert config.paths.excluded != config.paths.archive
+
+
 def test_минимальные_настройки():
     config = parse_config(настройки())
     assert config.paths.base == "F:/архив"

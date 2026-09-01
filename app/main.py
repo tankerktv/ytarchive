@@ -23,6 +23,7 @@ from pathlib import Path
 from core.archive import parse_archive
 from core.channels import parse_channels
 from core.config import DEFAULT_CONFIG_TEXT, Config, ConfigError, TomlError, loads, parse_config
+from core.exclusions import Exclusions, parse_exclusions
 from core.planner import estimate_range
 from core.livestate import LiveState, apply_event, should_write, start_channel, to_text
 from core.progress import Event, EventKind
@@ -89,6 +90,31 @@ def cmd_init(args) -> int:
     target.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8", newline="\n")
     print(f"создан {target} — поправьте пути и запустите: ytarchive check")
     return 0
+
+
+def load_exclusions(path: Path, скажи=None) -> Exclusions:
+    """Прочитать снятые галочки.
+
+    Отсутствие файла — обычное дело: галочек ещё не снимали. А вот
+    нечитаемый файл замалчивать нельзя: выкачка молча заберёт всё, что
+    человек убрал, и он узнает об этом по забитому диску.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return Exclusions()
+    except OSError as ошибка:
+        if скажи is not None:
+            скажи(f"список исключений не прочитан ({ошибка}) — качаю всё")
+        return Exclusions()
+
+    итог = parse_exclusions(text)
+    if итог.unreadable and скажи is not None:
+        скажи(
+            f"в списке исключений непонятых строк {len(итог.unreadable)}: "
+            f"{', '.join(итог.unreadable[:3])}"
+        )
+    return итог
 
 
 def _state(session: SessionConfig):
@@ -215,8 +241,16 @@ def cmd_run(args) -> int:
                 live = start_channel(live, имя, номер, всего, now=time.time())
                 записать_состояние(force=True)
 
+            исключения = load_exclusions(resolve(base, config.paths.excluded), скажи)
+            if исключения:
+                скажи(f"снято галочками роликов: {len(исключения)}")
+
             итог = run_session(
-                session, on_event=on_event, on_message=скажи, on_channel=на_канал
+                session,
+                exclusions=исключения,
+                on_event=on_event,
+                on_message=скажи,
+                on_channel=на_канал,
             )
             скажи(итог.describe())
             live = LiveState(updated_at=time.time())
@@ -251,6 +285,7 @@ def cmd_gui(args) -> int:
         logs_dir=resolve(base, config.paths.logs),
         lock_path=archive.parent / "ytarchive.lock",
         channels_path=resolve(base, config.paths.channels),
+        excluded_path=resolve(base, config.paths.excluded),
         config_path=Path(args.config),
         live_path=archive.parent / "ytarchive-live.json",
         settings=session.settings,

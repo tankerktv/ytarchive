@@ -25,7 +25,7 @@ from core.ytdlp_args import ALLOWED_HEIGHTS
 
 #: Ключи, которые мы понимаем. Всё остальное — повод пожаловаться.
 KNOWN_SECTIONS = {"paths", "download", "limits"}
-KNOWN_PATHS = {"base", "channels", "archive", "cookies", "logs"}
+KNOWN_PATHS = {"base", "channels", "archive", "cookies", "logs", "excluded"}
 KNOWN_DOWNLOAD = {"height", "prefer_av1", "write_subs", "sub_langs", "break_on_existing"}
 KNOWN_LIMITS = {"silence_limit", "sleep_min", "sleep_max", "sleep_requests", "socket_timeout"}
 
@@ -37,6 +37,10 @@ class Paths:
     archive: str = "_tools/downloaded.txt"
     cookies: str = "_tools/cookies.txt"
     logs: str = "_logs"
+    #: Ролики, снятые галочкой. Отдельно от `archive` намеренно: в архиве
+    #: лежит скачанное, и попади исключения туда, вернуть ролик было бы уже
+    #: нечем — он числился бы забранным.
+    excluded: str = "_tools/excluded.txt"
 
 
 @dataclass(frozen=True)
@@ -196,6 +200,8 @@ channels = "_tools/channels.txt"
 archive  = "_tools/downloaded.txt"
 cookies  = "_tools/cookies.txt"
 logs     = "_logs"
+# Ролики, снятые галочкой в окне выбора. Не путать с archive: там скачанное.
+excluded = "_tools/excluded.txt"
 
 [download]
 height = 1080

@@ -116,6 +116,92 @@ def test_без_исключений_очередь_не_меняется():
     assert apply_to(перепись, Exclusions()) == перепись
 
 
+# --- выбор по одному каналу в общем файле -----------------------------------
+
+
+def test_выбор_по_каналу_не_трогает_чужие():
+    """Файл общий, а окно показывает один канал. Записать в него то, что
+    видно на экране, значит стереть выбор по всем остальным.
+    """
+    from core.exclusions import merge
+
+    было = Exclusions(video_ids=frozenset({"чужой-ролик"[:11], "aaaaaaaaaaa"}))
+    итог = merge(было, known_ids={"aaaaaaaaaaa", "bbbbbbbbbbb"}, excluded_now={"bbbbbbbbbbb"})
+
+    assert "bbbbbbbbbbb" in итог
+    assert "aaaaaaaaaaa" not in итог, "галочку вернули — исключение должно уйти"
+    assert "чужой-ролик"[:11] in итог, "стёрли выбор другого канала"
+
+
+def test_неудавшаяся_перепись_не_стирает_файл():
+    """Пустой список на экране означает «не смогли посмотреть», а не
+    «человек снял все галочки». Разница — в целом файле выбора.
+    """
+    from core.exclusions import merge
+
+    было = Exclusions(video_ids=frozenset({"aaaaaaaaaaa", "bbbbbbbbbbb"}))
+    итог = merge(было, known_ids=set(), excluded_now=set())
+
+    assert итог.video_ids == было.video_ids
+
+
+def test_отметить_невиданное_нельзя():
+    # Верный признак того, что список на экране разошёлся с тем, что пишем.
+    from core.exclusions import merge
+
+    with pytest.raises(ValueError):
+        merge(Exclusions(), known_ids={"aaaaaaaaaaa"}, excluded_now={"bbbbbbbbbbb"})
+
+
+def test_повторное_сохранение_ничего_не_меняет():
+    from core.exclusions import merge
+
+    известные = {"aaaaaaaaaaa", "bbbbbbbbbbb"}
+    первое = merge(Exclusions(), известные, {"aaaaaaaaaaa"})
+    второе = merge(первое, известные, {"aaaaaaaaaaa"})
+    assert первое.video_ids == второе.video_ids
+
+
+# --- чтение файла перед выкачкой --------------------------------------------
+
+
+def test_нет_файла_значит_галочек_не_снимали(tmp_path):
+    """Обычное состояние, а не беда: молчать тут правильно."""
+    from app.main import load_exclusions
+
+    сообщения = []
+    итог = load_exclusions(tmp_path / "нет-такого.txt", сообщения.append)
+
+    assert len(итог) == 0
+    assert сообщения == []
+
+
+def test_непонятая_строка_в_исключениях_не_замалчивается(tmp_path):
+    """Потерянное исключение означает, что ролик вдруг начнёт качаться,
+    и человек не поймёт почему.
+    """
+    from app.main import load_exclusions
+
+    файл = tmp_path / "excluded.txt"
+    файл.write_text("rbYUHA9ZOg8\nчто-то не то\n", encoding="utf-8")
+    сообщения = []
+    итог = load_exclusions(файл, сообщения.append)
+
+    assert len(итог) == 1
+    assert any("непонятых строк" in m for m in сообщения)
+
+
+def test_нечитаемый_файл_исключений_виден_в_журнале(tmp_path):
+    """Молча скачав всё снятое, программа скажет об этом забитым диском."""
+    from app.main import load_exclusions
+
+    сообщения = []
+    итог = load_exclusions(tmp_path, сообщения.append)  # каталог вместо файла
+
+    assert len(итог) == 0
+    assert any("не прочитан" in m for m in сообщения)
+
+
 def test_исключения_и_скачанное_живут_врозь():
     """Соблазн держать их в одном файле велик — yt-dlp пропустил бы и то
     и другое. Но тогда снятие галочки уже ничего не вернёт: ролик будет

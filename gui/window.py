@@ -333,7 +333,16 @@ class Window(QMainWindow):
         self.кнопка_вверх = QPushButton("↑ Выше")
         self.кнопка_вниз = QPushButton("↓ Ниже")
         self.кнопка_убрать = QPushButton("Убрать")
-        for к in (self.кнопка_вверх, self.кнопка_вниз, self.кнопка_убрать):
+        self.кнопка_ролики = QPushButton("Выбрать ролики…")
+        self.кнопка_ролики.setToolTip(
+            "Список роликов канала с галочками. По умолчанию отмечены все."
+        )
+        for к in (
+            self.кнопка_вверх,
+            self.кнопка_вниз,
+            self.кнопка_убрать,
+            self.кнопка_ролики,
+        ):
             к.setEnabled(False)
             кнопки.addWidget(к)
         кнопки.addStretch(1)
@@ -348,6 +357,7 @@ class Window(QMainWindow):
         self.кнопка_вверх.clicked.connect(lambda: self._переставить(-1))
         self.кнопка_вниз.clicked.connect(lambda: self._переставить(+1))
         self.кнопка_убрать.clicked.connect(self._убрать_канал)
+        self.кнопка_ролики.clicked.connect(self._выбрать_ролики)
         self.список_каналов.itemSelectionChanged.connect(self._выбор_канала)
         self._каналы: list = []
         self._перечитать_каналы()
@@ -362,6 +372,23 @@ class Window(QMainWindow):
         self.кнопка_вверх.setEnabled(есть and номер > 0)
         self.кнопка_вниз.setEnabled(есть and номер < len(self._каналы) - 1)
         self.кнопка_убрать.setEnabled(есть)
+        self.кнопка_ролики.setEnabled(есть)
+
+    def _выбрать_ролики(self) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        if not строки:
+            return
+        канал = self._каналы[строки[0].row()]
+
+        from gui.videos import ОкноРоликов
+
+        окно = ОкноРоликов(self.source, канал.name, self)
+        if окно.exec():
+            снято = len(self.source.exclusions())
+            self.каналы_ответ.setText(
+                f"выбор сохранён; всего снято роликов по всем каналам: {снято}"
+                + " — вступит в силу со следующего прохода"
+            )
 
     def _переставить(self, куда: int) -> None:
         строки = self.список_каналов.selectionModel().selectedRows()
@@ -784,7 +811,36 @@ def run(source: ArchiveSource, *, selftest: bool = False) -> int:
         # Один оборот событий и выход: так сборка убеждается, что окно
         # хотя бы строится, не открывая ничего человеку.
         app.processEvents()
+        _проверить_окно_роликов(source)
+        app.processEvents()
         окно._дождаться_потоков()
         окно.трей.hide()
         return 0
     return app.exec()
+
+
+def _проверить_окно_роликов(source: ArchiveSource) -> None:
+    """Построить окно выбора на выдуманной переписи, не выходя в сеть.
+
+    Именно так ловились обе прошлые беды интерфейса — живой поток в момент
+    разрушения окна и упавший обработчик. Сеть здесь не нужна: перепись
+    подставляется руками, а рисование идёт то же самое.
+    """
+    from core.videos import Listing, Video
+    from gui.videos import ОкноРоликов
+
+    окно = ОкноРоликов(source, "проверка", фоновые=False)
+    окно._перепись_готова(
+        Listing(
+            videos=(
+                Video("aaaaaaaaaaa", "Первый ролик", 2796),
+                Video("bbbbbbbbbbb", "Второй ролик | со чертой", 0),
+            )
+        )
+    )
+    окно.поиск.setText("второй")
+    окно._всем_галочку(False)
+    окно.поиск.setText("")
+    окно._показать_предпросмотр()
+    окно._дождаться_потоков()
+    окно.deleteLater()

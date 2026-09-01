@@ -85,6 +85,31 @@ def toggle(exclusions: Exclusions, video_id: str, excluded: bool) -> Exclusions:
     return Exclusions(video_ids=frozenset(ids), unreadable=exclusions.unreadable)
 
 
+def merge(
+    exclusions: Exclusions,
+    known_ids: set[str] | frozenset[str],
+    excluded_now: set[str] | frozenset[str],
+) -> Exclusions:
+    """Записать выбор по одному каналу, не тронув чужие.
+
+    Файл общий на все каналы, а окно показывает один. Записать в него то,
+    что видно на экране, значит стереть выбор по всем остальным каналам —
+    молча; заметят это через недели по внезапно скачанным роликам.
+
+    Поэтому трогаем только те идентификаторы, что были перед глазами.
+    Отсюда же полезное следствие: не удалась перепись — список пуст —
+    файл остался как был.
+    """
+    известные = set(known_ids)
+    отмеченные = set(excluded_now)
+    чужие = отмеченные - известные
+    if чужие:
+        raise ValueError(f"отмечено то, чего не было в списке: {sorted(чужие)[:3]}")
+
+    ids = (set(exclusions.video_ids) - известные) | отмеченные
+    return Exclusions(video_ids=frozenset(ids), unreadable=exclusions.unreadable)
+
+
 def apply_to(video_ids: list[str], exclusions: Exclusions) -> list[str]:
     """Убрать исключённые, сохранив порядок остальных."""
     return [v for v in video_ids if v not in exclusions.video_ids]

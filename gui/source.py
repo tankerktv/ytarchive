@@ -29,6 +29,9 @@ class ArchiveSource:
     channels_path: Path
     config_path: Path
     live_path: Path
+    #: Снятые галочки. Не задан — кладём рядом со списком каналов, чтобы
+    #: пришедший править файлы руками нашёл оба в одном месте.
+    excluded_path: Path | None = None
     #: Нужны поиску: откуда брать куки и чем звать yt-dlp.
     settings: object | None = None
     ytdlp: tuple[str, ...] = ("yt-dlp",)
@@ -114,6 +117,60 @@ class ArchiveSource:
         """Записать список каналов. Сначала копия — файл правит человек,
         и потерять его из-за нашей ошибки нельзя."""
         return self._write(self.channels_path, text, "список каналов сохранён")
+
+    # --- снятые галочки -----------------------------------------------------
+
+    @property
+    def excluded_file(self) -> Path:
+        return self.excluded_path or (self.channels_path.parent / "excluded.txt")
+
+    def exclusions(self):
+        """Прочитать снятые галочки. Нет файла — значит их не снимали."""
+        from core.exclusions import Exclusions, parse_exclusions
+
+        try:
+            return parse_exclusions(self.excluded_file.read_text(encoding="utf-8"))
+        except OSError:
+            return Exclusions()
+
+    def write_exclusions(self, video_ids) -> str:
+        """Записать снятые галочки.
+
+        Пишем весь список целиком, а не правим построчно: окно знает полную
+        картину, и дописывание по одному рано или поздно разойдётся с ней.
+        """
+        from core.exclusions import format_exclusions
+
+        return self._write(
+            self.excluded_file, format_exclusions(set(video_ids)), "выбор сохранён"
+        )
+
+    @property
+    def thumbs_dir(self) -> Path:
+        return self.channels_path.parent / "thumbs"
+
+    def listing(self, channel_name: str):
+        """Переписать канал: идентификаторы, названия, длительности.
+
+        Ходит в сеть — звать только из отдельного потока, иначе окно замрёт
+        на те секунды, что yt-dlp обходит шестьсот роликов.
+        """
+        from core.channels import parse_channels
+        from core.videos import Listing
+        from runner.session import SessionConfig, enumerate_channel
+
+        if self.settings is None:
+            return Listing()
+        for канал in parse_channels(self.channels_text()).channels:
+            if канал.name == channel_name:
+                config = SessionConfig(
+                    base_dir=self.base,
+                    channels_file=self.channels_path,
+                    settings=self.settings,
+                    ytdlp=self.ytdlp,
+                )
+                return enumerate_channel(канал, config)
+        return Listing()
 
     def config_text(self) -> str:
         try:
