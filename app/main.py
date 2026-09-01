@@ -157,7 +157,15 @@ def cmd_run(args) -> int:
 
     def скажи(текст: str) -> None:
         строка = f"{datetime.now():%H:%M:%S}  {текст}"
-        print(строка, flush=True)
+        # Задание идёт под pythonw, у которого стандартный поток может
+        # отсутствовать. На этой машине он есть и печать проходит, но
+        # полагаться на это нельзя: журнал важнее консоли, и падение
+        # из-за неё стоило бы ночи выкачки.
+        if sys.stdout is not None:
+            try:
+                print(строка, flush=True)
+            except (OSError, ValueError):
+                pass
         log.write(строка + "\n")
         log.flush()
 
@@ -224,6 +232,7 @@ def cmd_gui(args) -> int:
     config, _ = load_config(Path(args.config))
     base = Path(config.paths.base)
     archive = resolve(base, config.paths.archive)
+    session = build_session(config, base)
 
     try:
         from gui.source import ArchiveSource
@@ -244,6 +253,8 @@ def cmd_gui(args) -> int:
         channels_path=resolve(base, config.paths.channels),
         config_path=Path(args.config),
         live_path=archive.parent / "ytarchive-live.json",
+        settings=session.settings,
+        ytdlp=session.ytdlp,
     )
     return run(source, selftest=args.selftest)
 

@@ -29,7 +29,35 @@ class ArchiveSource:
     channels_path: Path
     config_path: Path
     live_path: Path
+    #: Нужны поиску: откуда брать куки и чем звать yt-dlp.
+    settings: object | None = None
+    ytdlp: tuple[str, ...] = ("yt-dlp",)
     task_name: str = TASK_NAME
+
+    def free_bytes(self) -> int:
+        """Сколько места на диске архива. Ноль значит «не смогли узнать» —
+        и тогда лучше не утверждать, что канал влезет."""
+        import shutil
+
+        try:
+            return shutil.disk_usage(self.base).free
+        except OSError:
+            return 0
+
+    def add_channel(self, name: str, url: str) -> str:
+        """Добавить канал в список, не потеряв остальных."""
+        from core.channels import Channel, format_channels, parse_channels
+
+        разбор = parse_channels(self.channels_text())
+        if any(c.name == name for c in разбор.channels):
+            return f"«{name}» уже в списке"
+        if разбор.problems:
+            # Не переписываем файл, в котором есть непонятое: перезапись
+            # потеряла бы эти строки молча.
+            return "в списке есть непонятые строки — сначала поправьте их"
+        стало = (*разбор.channels, Channel(name=name, url=url))
+        ответ = self.write_channels(format_channels(стало))
+        return f"{ответ}: добавлен «{name}»" if "сохранён" in ответ else ответ
 
     def log_tail(self, lines: int) -> list[str]:
         """Хвост самого свежего журнала.

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -80,6 +81,47 @@ def нарисовать_значок(цвет: str) -> QIcon:
     кисть.drawText(полотно.rect(), Qt.AlignmentFlag.AlignCenter, "↓")
     кисть.end()
     return QIcon(полотно)
+
+
+class ПоискКаналов(QThread):
+    """Поиск и перепись в отдельном потоке.
+
+    Иначе окно застыло бы на минуты: перепись канала на две тысячи роликов
+    идёт заметно дольше самого поиска. Найденное показывается сразу,
+    числа подставляются по мере готовности.
+    """
+
+    найдено = Signal(object, str)
+    измерено = Signal(int, object, str)
+    закончено = Signal()
+
+    def __init__(self, source: ArchiveSource, запрос: str) -> None:
+        super().__init__()
+        self.source = source
+        self.запрос = запрос
+        self._бросить = False
+
+    def бросить(self) -> None:
+        """Прекратить работу: человек закрыл окно или начал новый поиск.
+        Досчитывать ненужное — держать его в ожидании зря."""
+        self._бросить = True
+
+    def run(self) -> None:
+        from runner.search import measure_all, search_channels
+
+        кандидаты, ответ = search_channels(
+            self.запрос, self.source.settings, ytdlp=self.source.ytdlp
+        )
+        self.найдено.emit(кандидаты, ответ)
+        if кандидаты and not self._бросить:
+            measure_all(
+                кандидаты,
+                self.source.settings,
+                ytdlp=self.source.ytdlp,
+                on_measured=lambda н, к, о: self.измерено.emit(н, к, о),
+                stop=lambda: self._бросить,
+            )
+        self.закончено.emit()
 
 
 class Window(QMainWindow):
@@ -169,6 +211,40 @@ class Window(QMainWindow):
         столбец = QVBoxLayout(корень)
         столбец.setContentsMargins(16, 12, 16, 12)
 
+        # --- поиск канала ---
+        ряд_поиска = QHBoxLayout()
+        self.поле_поиска = QLineEdit()
+        self.поле_поиска.setPlaceholderText("Название канала — например, alex m")
+        self.кнопка_искать = QPushButton("Найти")
+        ряд_поиска.addWidget(self.поле_поиска, 1)
+        ряд_поиска.addWidget(self.кнопка_искать)
+        столбец.addLayout(ряд_поиска)
+
+        self.поиск_ответ = QLabel("")
+        self.поиск_ответ.setStyleSheet("color: #666;")
+        столбец.addWidget(self.поиск_ответ)
+
+        self.находки = QTableWidget(0, 3)
+        self.находки.setHorizontalHeaderLabels(["Канал", "Объём", "Влезет"])
+        self.находки.horizontalHeader().setStretchLastSection(True)
+        self.находки.setColumnWidth(0, 300)
+        self.находки.setColumnWidth(1, 280)
+        self.находки.setMaximumHeight(150)
+        self.находки.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        столбец.addWidget(self.находки)
+
+        self.кнопка_добавить = QPushButton("Добавить выбранный канал")
+        self.кнопка_добавить.setEnabled(False)
+        столбец.addWidget(self.кнопка_добавить)
+
+        self.кнопка_искать.clicked.connect(self._искать)
+        self.поле_поиска.returnPressed.connect(self._искать)
+        self.находки.itemSelectionChanged.connect(self._выбор_находки)
+        self.кнопка_добавить.clicked.connect(self._добавить_находку)
+        self._находки: list = []
+        self._поиск = None
+
         столбец.addWidget(QLabel("Сколько уже лежит в архиве по каждому каналу:"))
         self.таблица = QTableWidget(0, 3)
         self.таблица.setHorizontalHeaderLabels(["Канал", "Файлов", "Объём"])
@@ -197,6 +273,76 @@ class Window(QMainWindow):
         вернуть.clicked.connect(self._перечитать_каналы)
         self._перечитать_каналы()
         return корень
+
+    def _искать(self) -> None:
+        запрос = self.поле_поиска.text().strip()
+        if not запрос:
+            self.поиск_ответ.setText("введите название")
+            return
+        if self._поиск is not None and self._поиск.isRunning():
+            self._поиск.бросить()
+
+        self.находки.setRowCount(0)
+        self._находки = []
+        self.кнопка_добавить.setEnabled(False)
+        self.кнопка_искать.setEnabled(False)
+        self.поиск_ответ.setText("ищу…")
+
+        self._поиск = ПоискКаналов(self.source, запрос)
+        self._поиск.найдено.connect(self._показать_находки)
+        self._поиск.измерено.connect(self._обновить_находку)
+        self._поиск.закончено.connect(lambda: self.кнопка_искать.setEnabled(True))
+        self._поиск.start()
+
+    def _показать_находки(self, кандидаты: list, ответ: str) -> None:
+        self._находки = list(кандидаты)
+        self.поиск_ответ.setText(ответ)
+        self.находки.setRowCount(len(self._находки))
+        for номер, кандидат in enumerate(self._находки):
+            self._нарисовать_находку(номер, кандидат)
+
+    def _обновить_находку(self, номер: int, кандидат, ответ: str) -> None:
+        if 0 <= номер < len(self._находки):
+            self._находки[номер] = кандидат
+            self._нарисовать_находку(номер, кандидат)
+            if not кандидат.measured:
+                self.поиск_ответ.setText(f"{кандидат.name}: {ответ}")
+
+    def _нарисовать_находку(self, номер: int, кандидат) -> None:
+        from core.search import fits
+
+        влезет = fits(кандидат, self.source.free_bytes())
+        # Прямо говорим, что неизвестно: «да» по неизмеренному каналу —
+        # это обещание, которого мы дать не можем.
+        подпись = {None: "…", True: "да", False: "НЕ ВЛЕЗЕТ"}[влезет]
+        for столбец, значение in enumerate((кандидат.name, кандидат.describe(), подпись)):
+            ячейка = QTableWidgetItem(значение)
+            if столбец == 2 and влезет is False:
+                ячейка.setForeground(QColor("#c62828"))
+            self.находки.setItem(номер, столбец, ячейка)
+
+    def _выбор_находки(self) -> None:
+        строки = self.находки.selectionModel().selectedRows()
+        self.кнопка_добавить.setEnabled(bool(строки))
+
+    def _добавить_находку(self) -> None:
+        строки = self.находки.selectionModel().selectedRows()
+        if not строки:
+            return
+        кандидат = self._находки[строки[0].row()]
+        from core.search import fits
+
+        if fits(кандидат, self.source.free_bytes()) is False:
+            ответ = QMessageBox.question(
+                self,
+                "Может не влезть",
+                f"По верхней оценке «{кандидат.name}» займёт больше, чем есть свободного места.\n\n"
+                f"{кандидат.describe()}\n\nВсё равно добавить?",
+            )
+            if ответ != QMessageBox.StandardButton.Yes:
+                return
+        self.поиск_ответ.setText(self.source.add_channel(кандидат.name, кандидат.url))
+        self._перечитать_каналы()
 
     def _перечитать_каналы(self) -> None:
         self.поле_каналов.setPlainText(self.source.channels_text())
