@@ -129,6 +129,7 @@ def run_watched(
     cwd: str | None = None,
     env: dict[str, str] | None = None,
     separate_streams: bool = False,
+    should_stop: Callable[[], bool] | None = None,
 ) -> RunOutcome:
     """Запустить команду и держать её под надзором до конца.
 
@@ -223,6 +224,14 @@ def run_watched(
         now = clock()
         if got_line:
             last_output = now
+
+        # Просьба прекратить приходит от окна: человек закрыл его, не дождавшись
+        # ответа yt-dlp. Ждать нельзя — живой поток в момент разрушения окна
+        # обрывает программу целиком, а yt-dlp сам по себе отвечает минутами.
+        if should_stop is not None and should_stop():
+            killed, kill_failed = _kill_tree(process, policy.kill_grace)
+            verdict = Verdict.CANCELLED
+            break
 
         exited = process.poll() is not None
         state = ProcessState(

@@ -149,11 +149,14 @@ class ArchiveSource:
     def thumbs_dir(self) -> Path:
         return self.channels_path.parent / "thumbs"
 
-    def listing(self, channel_name: str):
+    def listing(self, channel_name: str, should_stop=None):
         """Переписать канал: идентификаторы, названия, длительности.
 
         Ходит в сеть — звать только из отдельного потока, иначе окно замрёт
         на те секунды, что yt-dlp обходит шестьсот роликов.
+
+        `should_stop` обязателен для окна: закрытое окно должно уметь
+        прекратить перепись, а не ждать её минуту.
         """
         from core.channels import parse_channels
         from core.videos import Listing
@@ -169,7 +172,7 @@ class ArchiveSource:
                     settings=self.settings,
                     ytdlp=self.ytdlp,
                 )
-                return enumerate_channel(канал, config)
+                return enumerate_channel(канал, config, should_stop=should_stop)
         return Listing()
 
     def config_text(self) -> str:

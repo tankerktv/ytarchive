@@ -10,6 +10,10 @@
 """
 
 import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -53,7 +57,7 @@ class ПоддельныйИсточник:
         self.записано = set(video_ids)
         return "выбор сохранён"
 
-    def listing(self, channel_name):
+    def listing(self, channel_name, should_stop=None):
         return ПЕРЕПИСЬ
 
 
@@ -132,6 +136,76 @@ def test_скачанное_видно_в_списке(приложение, tmp
 
     assert двери.таблица.item(0, 4).text() == "скачан"
     двери._дождаться_потоков()
+
+
+# --- закрытие окна во время работы ------------------------------------------
+
+#: Проверяется отдельным запуском, и иначе никак: Qt на живом потоке в момент
+#: разрушения окна не бросает исключение, а обрывает процесс — без сообщения
+#: и без кода возврата. Внутри своего же процесса это не поймать.
+СЦЕНАРИЙ = textwrap.dedent(
+    """
+    import sys, time, pathlib
+    from PySide6.QtWidgets import QApplication
+    from core.exclusions import Exclusions
+    from core.videos import Listing, Video
+
+    app = QApplication(sys.argv)
+    слышит = sys.argv[2] == 'уступчивый'
+
+    class Источник:
+        def __init__(self, tmp):
+            self.thumbs_dir = pathlib.Path(tmp) / 'thumbs'
+        def archive_text(self): return ''
+        def exclusions(self): return Exclusions()
+        def write_exclusions(self, ids): return 'выбор сохранён'
+        def listing(self, name, should_stop=None):
+            # Глухой не слышит просьбы прекратить — как urlopen с таймаутом.
+            for _ in range(40):
+                if слышит and should_stop and should_stop():
+                    break
+                time.sleep(0.2)
+            return Listing(videos=(Video('aaaaaaaaaaa', 'ролик', 60),))
+
+    from gui.videos import ОкноРоликов, дождаться_доживающих
+    окно = ОкноРоликов(Источник(sys.argv[1]), 'канал')
+    окно.show()
+    app.processEvents()
+    time.sleep(0.5)
+    окно.close()
+    окно.deleteLater()
+    app.processEvents()
+    дождаться_доживающих()
+    """
+)
+
+
+@pytest.mark.parametrize("поведение", ["уступчивый", "глухой"])
+def test_закрытие_во_время_переписи_не_обрывает_программу(tmp_path, поведение):
+    """Настоящий случай 02.09: окно, открытое человеком, ушло с кодом 127
+    без единой строки вывода. Перепись ещё шла, а Qt разрушал окно.
+
+    Проверяются оба исхода: работа, услышавшая просьбу прекратить, и та,
+    что не слышит, — вторую нельзя бросать, её надо дожидаться.
+    """
+    сценарий = tmp_path / "закрытие.py"
+    сценарий.write_text(СЦЕНАРИЙ, encoding="utf-8")
+
+    окружение = dict(os.environ)
+    окружение["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    окружение["QT_QPA_PLATFORM"] = "offscreen"
+
+    итог = subprocess.run(
+        [sys.executable, str(сценарий), str(tmp_path), поведение],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=окружение,
+    )
+    assert итог.returncode == 0, (
+        f"процесс оборвался ({итог.returncode}) — живой поток при разрушении окна;"
+        f" вывод: {итог.stderr[-400:]!r}"
+    )
 
 
 def test_неудавшаяся_перепись_не_даёт_сохранить(приложение, tmp_path):

@@ -104,7 +104,12 @@ def probe_channel(
     return решение, диагноз
 
 
-def enumerate_channel(channel: Channel, config: SessionConfig) -> Listing:
+def enumerate_channel(
+    channel: Channel,
+    config: SessionConfig,
+    *,
+    should_stop: Callable[[], bool] | None = None,
+) -> Listing:
     """Переписать канал: идентификаторы, длительности, названия.
 
     Раньше перепись делал сам yt-dlp внутри загрузки, и вмешаться было
@@ -114,7 +119,10 @@ def enumerate_channel(channel: Channel, config: SessionConfig) -> Listing:
     # Потоки разделяем: в stderr yt-dlp пишет своё («Deprecated Feature: ...»),
     # и в слитом тексте эти строки засчитываются в потерянные ролики.
     outcome = run_watched(
-        [*config.ytdlp, *args], config.probe_watchdog, separate_streams=True
+        [*config.ytdlp, *args],
+        config.probe_watchdog,
+        separate_streams=True,
+        should_stop=should_stop,
     )
     return parse_listing(outcome.stdout_text)
 
