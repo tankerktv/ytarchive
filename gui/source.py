@@ -1,13 +1,14 @@
-"""Откуда окно берёт данные и как управляет заданием.
+"""Откуда окно берёт данные и как заводит выкачку.
 
 Отделено от окна намеренно: в тестах сюда подставляется поддельный источник,
-и окно проверяется без файлов, без планировщика и без выкачки.
+и окно проверяется без файлов, без процессов и без выкачки.
 """
 
 from __future__ import annotations
 
 import itertools
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,13 +16,10 @@ from pathlib import Path
 from core.locking import LockState, judge_lock
 from runner.lockfile import STALE_AFTER, pid_alive, read_lock
 
-#: Имя задания в планировщике. Менять только вместе с самим заданием.
-TASK_NAME = "YouTube архив (непрерывная выкачка)"
-
 
 @dataclass
 class ArchiveSource:
-    """Настоящий источник: файлы архива и задание планировщика."""
+    """Настоящий источник: файлы архива и отдельный процесс выкачки."""
 
     base: Path
     archive_path: Path
@@ -36,7 +34,6 @@ class ArchiveSource:
     #: Нужны поиску: откуда брать куки и чем звать yt-dlp.
     settings: object | None = None
     ytdlp: tuple[str, ...] = ("yt-dlp",)
-    task_name: str = TASK_NAME
 
     def avatar(self, channel_name: str):
         """Логотип канала из кэша. В сеть не ходим — это зовётся из отрисовки,
@@ -317,28 +314,79 @@ class ArchiveSource:
         )
         return state is LockState.HELD
 
+    # --- пуск и остановка ---------------------------------------------------
+
+    @property
+    def tools_dir(self) -> Path:
+        return self.archive_path.parent
+
+    def worker_running(self) -> bool:
+        """Заведён ли непрерывный обход. Не то же самое, что `download_running`:
+        между проходами он работает, но ничего не качает."""
+        from runner.daemon import daemon_running
+
+        return daemon_running(self.tools_dir)
+
     def start(self) -> str:
-        return self._schtasks("/Run", "запустил задание")
+        """Завести выкачку отдельным процессом.
+
+        Именно отдельным: окно не качает, иначе закрыть его значило бы
+        оборвать выкачку. Второй экземпляр не заведётся — не пустит замок,
+        но проверяем и здесь, чтобы ответить человеку словами, а не молчанием.
+        """
+        from runner.daemon import clear_stop, daemon_running
+
+        if daemon_running(self.tools_dir):
+            return "уже работает"
+
+        # Просьба остановиться могла остаться с прошлого раза: не сняв её,
+        # новый экземпляр встанет сразу же.
+        clear_stop(self.tools_dir)
+
+        запуск = self._worker_argv()
+        флаги = 0
+        if sys.platform == "win32":
+            # Без консоли и отвязанным от окна: закрытие окна не должно
+            # уводить выкачку за собой.
+            флаги = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+                subprocess, "DETACHED_PROCESS", 0
+            )
+        try:
+            subprocess.Popen(
+                запуск,
+                cwd=str(Path(__file__).resolve().parents[1]),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=флаги,
+                start_new_session=sys.platform != "win32",
+            )
+        except OSError as ошибка:
+            return f"не вышло запустить: {ошибка}"
+        return "запустил"
 
     def stop(self) -> str:
-        return self._schtasks("/End", "остановил задание")
+        from runner.daemon import ask_stop, daemon_running
 
-    def _schtasks(self, ключ: str, успех: str) -> str:
+        if not daemon_running(self.tools_dir):
+            return "никто не работает"
         try:
-            итог = subprocess.run(
-                ["schtasks", ключ, "/TN", self.task_name],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=30,
-                # Иначе кнопка в окне мигает консолью.
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        except (OSError, subprocess.TimeoutExpired) as ошибка:
-            return f"не вышло: {ошибка}"
-        if итог.returncode != 0:
-            # Показываем ответ планировщика как есть: свои формулировки тут
-            # только запутают, а его текст можно поискать в сети.
-            return f"планировщик отказал: {(итог.stderr or итог.stdout).strip()[:200]}"
-        return успех
+            ask_stop(self.tools_dir)
+        except OSError as ошибка:
+            return f"не вышло остановить: {ошибка}"
+        return "попросил остановиться — уйдёт, договорив текущий ролик"
+
+    def _worker_argv(self) -> list[str]:
+        """Чем запускать обход. Без консольного окна там, где это различают."""
+        корень = Path(__file__).resolve().parents[1]
+        питон = Path(sys.executable)
+        без_окна = питон.with_name("pythonw.exe")
+        if sys.platform == "win32" and без_окна.exists():
+            питон = без_окна
+        return [
+            str(питон),
+            str(корень / "ytarchive.py"),
+            "--config",
+            str(self.config_path),
+            "daemon",
+        ]

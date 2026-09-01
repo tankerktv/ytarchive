@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from core.schedule import Rhythm
 
 # tomllib появился в 3.11. На машине, где это писалось, настоящий
 # интерпретатор только 3.10 — а привязываться к тому, чего нет,
@@ -24,7 +26,10 @@ except ModuleNotFoundError:  # pragma: no cover — ветка для 3.10
 from core.ytdlp_args import ALLOWED_HEIGHTS
 
 #: Ключи, которые мы понимаем. Всё остальное — повод пожаловаться.
-KNOWN_SECTIONS = {"paths", "download", "limits"}
+KNOWN_SECTIONS = {"paths", "download", "limits", "schedule"}
+#: Паузы задаются минутами: секунды в настройках, которые правит человек,
+#: читаются плохо — «1800» надо ещё поделить в уме.
+KNOWN_SCHEDULE = {"pause_idle", "pause_busy", "pause_trouble"}
 KNOWN_PATHS = {"base", "channels", "archive", "cookies", "logs", "excluded"}
 KNOWN_DOWNLOAD = {"height", "prefer_av1", "write_subs", "sub_langs", "break_on_existing"}
 KNOWN_LIMITS = {"silence_limit", "sleep_min", "sleep_max", "sleep_requests", "socket_timeout"}
@@ -63,6 +68,9 @@ class Config:
     sub_langs: tuple[str, ...] = ("ru", "en")
     break_on_existing: bool = False
     limits: Limits = Limits()
+    #: Ритм проходов. Раньше его задавал планировщик Windows — «каждые
+    #: полчаса», одинаково на все случаи.
+    rhythm: Rhythm = field(default_factory=Rhythm)
 
 
 def loads(text: str) -> dict:
@@ -131,8 +139,23 @@ def parse_config(data: dict) -> Config:
             f"sleep_max ({limits.sleep_max}): пауза между роликами — не зависание"
         )
 
+    raw_schedule = data.get("schedule", {})
+    if not isinstance(raw_schedule, dict):
+        raise ConfigError("раздел [schedule] должен быть таблицей")
+    _check_unknown("schedule", raw_schedule, KNOWN_SCHEDULE)
+    по_умолчанию = Rhythm()
+    try:
+        rhythm = Rhythm(
+            idle=float(raw_schedule.get("pause_idle", по_умолчанию.idle / 60)) * 60,
+            busy=float(raw_schedule.get("pause_busy", по_умолчанию.busy / 60)) * 60,
+            trouble=float(raw_schedule.get("pause_trouble", по_умолчанию.trouble / 60)) * 60,
+        )
+    except (TypeError, ValueError) as ошибка:
+        raise ConfigError(f"раздел [schedule]: {ошибка}") from ошибка
+
     return Config(
         paths=paths,
+        rhythm=rhythm,
         height=height,
         prefer_av1=bool(raw_download.get("prefer_av1", True)),
         write_subs=bool(raw_download.get("write_subs", True)),
@@ -190,13 +213,28 @@ sleep_min = {config.limits.sleep_min}
 sleep_max = {config.limits.sleep_max}
 sleep_requests = {config.limits.sleep_requests}
 socket_timeout = {config.limits.socket_timeout}
+
+[schedule]
+# Паузы между проходами, в минутах. Программа держит их сама — планировщик
+# задач больше не нужен.
+# Ничего нового не нашлось:
+pause_idle = {config.rhythm.idle / 60:g}
+# Что-то скачали — в очереди почти наверняка есть ещё:
+pause_busy = {config.rhythm.busy / 60:g}
+# Нужен человек (истёкшие куки, устаревший yt-dlp): долбиться в стену незачем.
+pause_trouble = {config.rhythm.trouble / 60:g}
 """
 
+
+#: Место, куда `init` подставит домашний каталог хозяина машины. Держать
+#: в образце чужой рабочий путь нельзя: он не подойдёт никому другому и
+#: расскажет о прежнем владельце больше, чем нужно.
+HOME_MARK = "ДОМАШНИЙ-КАТАЛОГ"
 
 DEFAULT_CONFIG_TEXT = """\
 # Настройки архиватора. Единственное обязательное — куда складывать.
 [paths]
-base = "D:/Video/Архивы с YouTube"
+base = "ДОМАШНИЙ-КАТАЛОГ/Архив YouTube"
 # Остальные пути считаются от base, если не заданы абсолютными.
 channels = "_tools/channels.txt"
 archive  = "_tools/downloaded.txt"
@@ -223,4 +261,11 @@ sleep_min = 15
 sleep_max = 45
 sleep_requests = 2
 socket_timeout = 30
+
+[schedule]
+# Паузы между проходами, в минутах. Программа держит их сама — планировщик
+# задач больше не нужен.
+pause_idle = 30
+pause_busy = 1
+pause_trouble = 60
 """

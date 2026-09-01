@@ -7,7 +7,9 @@
     ytarchive init            создать настройки рядом с собой
     ytarchive check           достучаться до каналов, ничего не качая
     ytarchive plan            что будет скачано и сколько это займёт
-    ytarchive run             качать
+    ytarchive run             качать — один проход и выход
+    ytarchive daemon          качать непрерывно, своим расписанием
+    ytarchive stop            попросить работающий экземпляр остановиться
     ytarchive gui             окно наблюдения
 """
 
@@ -22,13 +24,23 @@ from pathlib import Path
 
 from core.archive import parse_archive
 from core.channels import parse_channels
-from core.config import DEFAULT_CONFIG_TEXT, Config, ConfigError, TomlError, loads, parse_config
+from core.config import (
+    DEFAULT_CONFIG_TEXT,
+    HOME_MARK,
+    Config,
+    ConfigError,
+    TomlError,
+    loads,
+    parse_config,
+)
 from core.exclusions import Exclusions, parse_exclusions
+from core.flow import SessionSummary
 from core.planner import estimate_range
 from core.livestate import LiveState, apply_event, should_write, start_channel, to_text
 from core.progress import Event, EventKind
 from core.supervisor import WatchdogPolicy
 from core.ytdlp_args import DownloadSettings
+from runner.daemon import ask_stop, daemon_running, run_forever
 from runner.lockfile import acquire
 from runner.session import SessionConfig, probe_channel, run_session
 
@@ -83,11 +95,15 @@ def cmd_init(args) -> int:
     if target.exists() and not args.force:
         print(f"{target} уже есть. Перезаписать: --force", file=sys.stderr)
         return 1
+    # В образце стоит метка, а не чей-то рабочий путь: чужой не подойдёт
+    # никому и расскажет о прежнем владельце больше, чем нужно.
+    образец = DEFAULT_CONFIG_TEXT.replace(HOME_MARK, Path.home().as_posix())
+
     if args.dry_run:
         print(f"создал бы {target}:\n")
-        print(DEFAULT_CONFIG_TEXT)
+        print(образец)
         return 0
-    target.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8", newline="\n")
+    target.write_text(образец, encoding="utf-8", newline="\n")
     print(f"создан {target} — поправьте пути и запустите: ytarchive check")
     return 0
 
@@ -159,7 +175,9 @@ def cmd_check(args) -> int:
 
     плохих = 0
     for channel in parsed.channels:
-        решение = probe_channel(channel, session, sleep=lambda _: None)
+        # Пара, а не одно значение: диагноз нужен циклу выкачки, чтобы не
+        # перебирать все каналы на общей беде. Здесь он не нужен.
+        решение, _ = probe_channel(channel, session, sleep=lambda _: None)
         if решение is None or решение.needs_human:
             причина = решение.reason if решение else "проверка не дала ответа"
             print(f"  {channel.name}: ОТКАЗ — {причина}")
@@ -171,11 +189,12 @@ def cmd_check(args) -> int:
     return 1 if плохих else 0
 
 
-def cmd_run(args) -> int:
-    config, _ = load_config(Path(args.config))
-    base = Path(config.paths.base)
-    session = build_session(config, base)
+def один_проход(config: Config, base: Path, session: SessionConfig, should_stop=None):
+    """Один проход по каналам: замок, журнал, живое состояние, выкачка.
 
+    Отделён от команды, потому что проходов теперь два хозяина: разовый
+    `run` и непрерывный `daemon`. Всё, что здесь есть, нужно обоим.
+    """
     logs_dir = resolve(base, config.paths.logs)
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_path = logs_dir / f"{datetime.now():%Y-%m-%d_%H%M}.log"
@@ -216,7 +235,9 @@ def cmd_run(args) -> int:
     if lock is None:
         скажи(объяснение)
         log.close()
-        return 0  # не беда: просто работает другой экземпляр
+        # Не беда: работает другой экземпляр. Пустой итог — «работы не было»,
+        # и демон подождёт обычную холостую паузу.
+        return SessionSummary()
     скажи(объяснение)
 
     try:
@@ -251,13 +272,83 @@ def cmd_run(args) -> int:
                 on_event=on_event,
                 on_message=скажи,
                 on_channel=на_канал,
+                should_stop=should_stop,
             )
             скажи(итог.describe())
             live = LiveState(updated_at=time.time())
             записать_состояние(force=True)
-            return 1 if итог.needs_human else 0
+            return итог
     finally:
         log.close()
+
+
+def cmd_run(args) -> int:
+    config, _ = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    итог = один_проход(config, base, build_session(config, base))
+    return 1 if итог.needs_human else 0
+
+
+def _дописать_в_журнал(logs_dir: Path, строка: str) -> None:
+    """Дописать строку в самый свежий журнал.
+
+    Своего журнала у демона нет намеренно: заведи он отдельный, окно читало
+    бы один файл, а половина событий лежала бы в другом.
+    """
+    try:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        журналы = sorted(logs_dir.glob("*.log"))
+        путь = журналы[-1] if журналы else logs_dir / f"{datetime.now():%Y-%m-%d_%H%M}.log"
+        with путь.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(строка + "\n")
+    except OSError:
+        pass  # журнал — не повод останавливать выкачку
+
+
+def cmd_daemon(args) -> int:
+    """Непрерывная работа своими силами: цикл проходов вместо планировщика."""
+    config, _ = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    session = build_session(config, base)
+    tools = resolve(base, config.paths.archive).parent
+
+    def проход(should_stop):
+        return один_проход(config, base, session, should_stop=should_stop)
+
+    logs_dir = resolve(base, config.paths.logs)
+
+    def скажи(текст: str) -> None:
+        строка = f"{datetime.now():%H:%M:%S}  {текст}"
+        if sys.stdout is not None:
+            try:
+                print(строка, flush=True)
+            except (OSError, ValueError):
+                pass
+        # И в журнал: между проходами своего журнала нет, а окно читает
+        # именно его. Без этого «жду следующего прохода» видно только тому,
+        # кто смотрит в консоль, — то есть никому.
+        _дописать_в_журнал(logs_dir, строка)
+
+    сделано = run_forever(
+        проход,
+        tools_dir=tools,
+        rhythm=config.rhythm,
+        on_message=скажи,
+        passes=args.passes,
+    )
+    return 0 if сделано or args.passes == 0 else 1
+
+
+def cmd_stop(args) -> int:
+    """Попросить работающий демон остановиться."""
+    config, _ = load_config(Path(args.config))
+    tools = resolve(Path(config.paths.base), config.paths.archive).parent
+    if not daemon_running(tools):
+        print("никто не работает")
+        return 0
+    ask_stop(tools)
+    print("попросил остановиться — демон уйдёт, договорив текущий ролик")
+    return 0
 
 
 def cmd_gui(args) -> int:
@@ -306,7 +397,18 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("plan", help="что будет скачано, без изменений").set_defaults(func=cmd_plan)
     sub.add_parser("check", help="достучаться до каналов").set_defaults(func=cmd_check)
-    sub.add_parser("run", help="качать").set_defaults(func=cmd_run)
+    sub.add_parser("run", help="качать — один проход и выход").set_defaults(func=cmd_run)
+
+    p_daemon = sub.add_parser("daemon", help="качать непрерывно, без планировщика задач")
+    p_daemon.add_argument(
+        "--passes", type=int, default=None,
+        help="сделать столько проходов и выйти (по умолчанию — пока не остановят)",
+    )
+    p_daemon.set_defaults(func=cmd_daemon)
+
+    sub.add_parser("stop", help="попросить работающий экземпляр остановиться").set_defaults(
+        func=cmd_stop
+    )
 
     p_gui = sub.add_parser("gui", help="окно наблюдения")
     p_gui.add_argument("--selftest", action="store_true",

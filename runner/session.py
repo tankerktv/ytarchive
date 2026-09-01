@@ -134,6 +134,7 @@ def download_channel(
     exclusions: Exclusions | None = None,
     on_event: Callable[[Event], None] | None = None,
     on_message: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[int, int]:
     """Пройти по каналу. Возвращает (скачано, упало).
 
@@ -145,7 +146,7 @@ def download_channel(
     было = _archive_ids(archive_path)
     исключения = exclusions or Exclusions()
 
-    перепись = enumerate_channel(channel, config)
+    перепись = enumerate_channel(channel, config, should_stop=should_stop)
     if перепись.unreadable and on_message is not None:
         on_message(
             f"{channel.name}: непонятых строк в переписи {len(перепись.unreadable)}"
@@ -184,7 +185,12 @@ def download_channel(
 
     try:
         args = build_batch_args(config.settings, str(batch))
-        run_watched([*config.ytdlp, *args], config.watchdog, on_line=on_line)
+        run_watched(
+            [*config.ytdlp, *args],
+            config.watchdog,
+            on_line=on_line,
+            should_stop=should_stop,
+        )
     finally:
         # Список — вещь одноразовая: оставленный, он собьёт с толку при
         # разборе беды, показав вчерашнюю очередь как сегодняшнюю.
@@ -205,8 +211,14 @@ def run_session(
     on_message: Callable[[str], None] | None = None,
     on_channel: Callable[[str, int, int], None] | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    should_stop: Callable[[], bool] | None = None,
 ) -> SessionSummary:
-    """Пройти по всем каналам списка."""
+    """Пройти по всем каналам списка.
+
+    `should_stop` спрашивается перед каждым каналом и передаётся вглубь,
+    к самому yt-dlp: остановка, доходящая только до конца текущего канала,
+    может думать часами, а человек в это время смотрит на кнопку.
+    """
     text = _read_text(config.channels_file)
     if text is None:
         return SessionSummary(
@@ -227,6 +239,10 @@ def run_session(
 
     results: list[ChannelResult] = []
     for номер, channel in enumerate(parsed.channels, start=1):
+        if should_stop is not None and should_stop():
+            if on_message is not None:
+                on_message("остановлено по просьбе — остальные каналы ждут следующего прохода")
+            break
         if on_channel is not None:
             on_channel(channel.name, номер, len(parsed.channels))
         решение, диагноз = probe_channel(channel, config, on_event=on_message, sleep=sleep)
@@ -252,7 +268,7 @@ def run_session(
 
         скачано, упало = download_channel(
             channel, config, exclusions=exclusions,
-            on_event=on_event, on_message=on_message,
+            on_event=on_event, on_message=on_message, should_stop=should_stop,
         )
         results.append(ChannelResult(channel=channel.name, downloaded=скачано, failed=упало))
         if on_message is not None:
