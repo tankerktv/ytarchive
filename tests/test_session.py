@@ -43,6 +43,10 @@ pytestmark = pytest.mark.slow
         # длительность и название. Различаем по шаблону печати.
         шаблон = args[args.index('--print') + 1]
         if '%(title)s' in шаблон:
+            # Настоящая строка yt-dlp 2026.7.4 под Python 3.10. Идёт в stderr
+            # при каждом запуске и раньше засчитывалась в потерянные ролики.
+            sys.stderr.write('Deprecated Feature: Support for Python version '
+                             '3.10 has been deprecated.\\n')
             sys.stdout.write('rbYUHA9ZOg8\\t2796\\tПервый ролик\\n')
             sys.stdout.write('G02jtMoGy2g\\t1200\\tВторой ролик\\n')
         else:
@@ -279,6 +283,22 @@ def test_без_исключений_качается_всё_как_раньше
 
     assert итог.downloaded == 1
     assert "rbYUHA9ZOg8" in (каталог / "downloaded.txt").read_text(encoding="utf-8")
+
+
+def test_ворчание_ytdlp_не_считается_потерянным_роликом(стенд):
+    """Настоящий случай 02.09: в журнале ALEX M появилось «непонятых строк
+    в переписи 1», хотя все 37 роликов разобрались. Это была строка из stderr,
+    попавшая в перепись через слитый поток.
+
+    Ложная тревога опаснее молчания: привыкнув к ней, настоящую пропажу
+    ролика тоже сочтут ворчанием.
+    """
+    config, _ = стенд
+    сообщения = []
+    итог = запуск(config, on_message=сообщения.append)
+
+    assert not any("непонятых строк" in m for m in сообщения), сообщения
+    assert итог.downloaded == 1, "разделение потоков не должно ломать выкачку"
 
 
 def test_список_очереди_убирается_за_собой(стенд):

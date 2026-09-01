@@ -50,6 +50,9 @@ class RunOutcome:
     elapsed: float = 0.0
     killed: bool = False
     kill_failed: bool = False
+    #: Только сказанное в stdout. Заполняется отдельно лишь при
+    #: `separate_streams=True`, иначе повторяет `lines`.
+    stdout_lines: list[str] = field(default_factory=list)
 
     @property
     def is_ok(self) -> bool:
@@ -58,6 +61,17 @@ class RunOutcome:
     @property
     def text(self) -> str:
         return "\n".join(self.lines)
+
+    @property
+    def stdout_text(self) -> str:
+        """Вывод без примеси stderr — для того, что разбирается как данные.
+
+        Разбирать слитый текст нельзя: yt-dlp пишет в stderr предупреждения
+        вроде «Deprecated Feature: ...», и перепись канала засчитывает их
+        в потерянные ролики. Ложная тревога хуже её отсутствия: привыкнув
+        к ней, настоящую пропажу тоже сочтут шумом.
+        """
+        return "\n".join(self.stdout_lines)
 
 
 def _kill_tree(process: subprocess.Popen, grace: float) -> tuple[bool, bool]:
@@ -114,6 +128,7 @@ def run_watched(
     clock: Callable[[], float] = time.monotonic,
     cwd: str | None = None,
     env: dict[str, str] | None = None,
+    separate_streams: bool = False,
 ) -> RunOutcome:
     """Запустить команду и держать её под надзором до конца.
 
@@ -129,7 +144,10 @@ def run_watched(
 
     popen_kwargs: dict[str, object] = {
         "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
+        # По умолчанию потоки слиты: надзорщику любой звук — признак жизни,
+        # а разбору бед нужен весь текст в одном месте. Разделяем только там,
+        # где вывод разбирается как данные.
+        "stderr": subprocess.PIPE if separate_streams else subprocess.STDOUT,
         # Пустой ввод, а не унаследованный: см. пункт 1 в заголовке файла.
         "stdin": subprocess.DEVNULL,
         "text": True,
@@ -151,16 +169,31 @@ def run_watched(
     process = subprocess.Popen(argv, **popen_kwargs)  # type: ignore[arg-type]
 
     lines: list[str] = []
-    inbox: queue.Queue[str] = queue.Queue()
+    из_stdout: list[str] = []
+    #: Признак «строка пришла из stdout» несём вместе со строкой: при двух
+    #: читателях порядок сохраняет только очередь, а не отдельные списки.
+    inbox: queue.Queue[tuple[bool, str]] = queue.Queue()
 
-    def drain() -> None:
+    def drain(stream, свой: bool) -> None:
         # Читаем до конца всегда: недочитанная труба останавливает потомка.
-        assert process.stdout is not None
-        for raw in process.stdout:
-            inbox.put(raw.rstrip("\r\n"))
+        for raw in stream:
+            inbox.put((свой, raw.rstrip("\r\n")))
 
-    reader = threading.Thread(target=drain, daemon=True, name="ytarchive-reader")
-    reader.start()
+    assert process.stdout is not None
+    readers = [
+        threading.Thread(
+            target=drain, args=(process.stdout, True), daemon=True, name="ytarchive-reader"
+        )
+    ]
+    if process.stderr is not None:
+        readers.append(
+            threading.Thread(
+                target=drain, args=(process.stderr, False), daemon=True,
+                name="ytarchive-reader-err",
+            )
+        )
+    for reader in readers:
+        reader.start()
 
     last_output = started
     verdict = Verdict.RUNNING
@@ -170,13 +203,17 @@ def run_watched(
         got_line = False
         while True:
             try:
-                line = inbox.get_nowait()
+                свой, line = inbox.get_nowait()
             except queue.Empty:
                 break
             got_line = True
             lines.append(line)
             if len(lines) > KEEP_LINES:
                 del lines[: len(lines) - KEEP_LINES]
+            if свой:
+                из_stdout.append(line)
+                if len(из_stdout) > KEEP_LINES:
+                    del из_stdout[: len(из_stdout) - KEEP_LINES]
             if on_line is not None:
                 try:
                     on_line(line)
@@ -207,12 +244,16 @@ def run_watched(
 
     # Добираем хвост вывода: между последней проверкой и завершением
     # потомок мог сказать что-то важное — например, причину отказа.
-    reader.join(timeout=2.0)
+    for reader in readers:
+        reader.join(timeout=2.0)
     while True:
         try:
-            lines.append(inbox.get_nowait())
+            свой, line = inbox.get_nowait()
         except queue.Empty:
             break
+        lines.append(line)
+        if свой:
+            из_stdout.append(line)
 
     return RunOutcome(
         verdict=verdict,
@@ -221,6 +262,8 @@ def run_watched(
         elapsed=clock() - started,
         killed=killed,
         kill_failed=kill_failed,
+        # При слитых потоках всё пришло через stdout, поэтому список тот же.
+        stdout_lines=из_stdout[-KEEP_LINES:],
     )
 
 

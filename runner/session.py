@@ -111,8 +111,12 @@ def enumerate_channel(channel: Channel, config: SessionConfig) -> Listing:
     некуда. Теперь она наша — только так можно вычесть исключённые ролики.
     """
     args = build_enumerate_args(config.settings, channel.url)
-    outcome = run_watched([*config.ytdlp, *args], config.probe_watchdog)
-    return parse_listing(outcome.text)
+    # Потоки разделяем: в stderr yt-dlp пишет своё («Deprecated Feature: ...»),
+    # и в слитом тексте эти строки засчитываются в потерянные ролики.
+    outcome = run_watched(
+        [*config.ytdlp, *args], config.probe_watchdog, separate_streams=True
+    )
+    return parse_listing(outcome.stdout_text)
 
 
 def download_channel(

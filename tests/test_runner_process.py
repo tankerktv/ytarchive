@@ -63,6 +63,55 @@ def test_стандартная_ошибка_попадает_в_тот_же_п�
     assert "из ошибки" in итог.text
 
 
+# --- разделение потоков -----------------------------------------------------
+
+
+ОБА_ПОТОКА = "import sys; print('данные'); print('шум', file=sys.stderr)"
+
+
+def test_при_слитых_потоках_stdout_повторяет_общий_вывод():
+    """Разделения не просили — значит `stdout_lines` не должен быть пустым
+    сюрпризом для тех, кто их читает.
+    """
+    итог = run_watched(питон(ОБА_ПОТОКА), БЫСТРАЯ)
+    assert "данные" in итог.stdout_text
+    assert "шум" in итог.stdout_text
+
+
+def test_разделённый_stdout_не_содержит_stderr():
+    """Настоящий случай 02.09: yt-dlp пишет в stderr «Deprecated Feature: ...»,
+    и перепись канала засчитала эту строку в потерянные ролики.
+    """
+    итог = run_watched(питон(ОБА_ПОТОКА), БЫСТРАЯ, separate_streams=True)
+    assert "данные" in итог.stdout_text
+    assert "шум" not in итог.stdout_text
+
+
+def test_разделение_не_теряет_stderr_из_общего_вывода():
+    # Разбор бед смотрит в `text` — там обязано остаться всё.
+    итог = run_watched(питон(ОБА_ПОТОКА), БЫСТРАЯ, separate_streams=True)
+    assert "шум" in итог.text
+    assert "данные" in итог.text
+
+
+def test_говорящий_только_в_stderr_считается_живым():
+    """Иначе разделение обернулось бы снятием живого потомка: молчание
+    в stdout — не признак зависания.
+    """
+    код = (
+        "import sys, time\n"
+        "for _ in range(6):\n"
+        "    print('жив', file=sys.stderr); sys.stderr.flush(); time.sleep(0.1)\n"
+    )
+    итог = run_watched(
+        питон(код),
+        WatchdogPolicy(silence_limit=0.4, total_limit=10.0, kill_grace=1.0),
+        separate_streams=True,
+    )
+    assert итог.verdict is Verdict.OK, "живого потомка сняли за молчание в stdout"
+    assert not итог.killed
+
+
 def test_обратный_вызов_получает_строки():
     собрано: list[str] = []
     run_watched(питон("print('раз'); print('два')"), БЫСТРАЯ, on_line=собрано.append)
