@@ -15,8 +15,14 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+try:  # 3.11 и новее
+    import tomllib
+except ModuleNotFoundError:
+    # 3.10: тот же разбор внешним пакетом. Без этого проверку нельзя
+    # прогнать на машине разработки, а гонять её надо ДО тега, не в CI.
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
