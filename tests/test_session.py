@@ -39,18 +39,37 @@ pytestmark = pytest.mark.slow
             sys.exit(1)
         if сценарий == 'stale':
             sys.exit(0)
-        sys.stdout.write('rbYUHA9ZOg8\\n')
+        # Проверка доступа просит один идентификатор, перепись — ещё
+        # длительность и название. Различаем по шаблону печати.
+        шаблон = args[args.index('--print') + 1]
+        if '%(title)s' in шаблон:
+            sys.stdout.write('rbYUHA9ZOg8\\t2796\\tПервый ролик\\n')
+            sys.stdout.write('G02jtMoGy2g\\t1200\\tВторой ролик\\n')
+        else:
+            sys.stdout.write('rbYUHA9ZOg8\\n')
         sys.exit(0)
 
     archive = args[args.index('--download-archive') + 1]
-    sys.stdout.write('[download] Downloading item 1 of 2\\n')
-    sys.stdout.write('[download] Destination: /tmp/ролик.f399.mp4\\n')
-    sys.stdout.write('[download] 100% of  462.12MiB in 00:01:46 at 4.35MiB/s\\n')
-    sys.stdout.write('[Merger] Merging formats into "/tmp/ролик.mkv"\\n')
-    sys.stdout.write('[download] Downloading item 2 of 2\\n')
-    sys.stderr.write("ERROR: [youtube] G02jtMoGy2g: Sign in to confirm.\\n")
-    with open(archive, 'a', encoding='utf-8') as fh:
-        fh.write('youtube rbYUHA9ZOg8\\n')
+    # Качаем только то, что подано списком — как настоящий yt-dlp.
+    # Иначе проверка исключений была бы бессмысленной: подделка скачала бы
+    # снятый ролик, и тест этого не заметил.
+    заказ = [
+        s.strip()
+        for s in pathlib.Path(args[args.index('--batch-file') + 1])
+        .read_text(encoding='utf-8').splitlines()
+        if s.strip()
+    ]
+
+    for номер, ролик in enumerate(заказ, start=1):
+        sys.stdout.write('[download] Downloading item %d of %d\\n' % (номер, len(заказ)))
+        if ролик == 'G02jtMoGy2g':
+            sys.stderr.write("ERROR: [youtube] G02jtMoGy2g: Sign in to confirm.\\n")
+            continue
+        sys.stdout.write('[download] Destination: /tmp/ролик.f399.mp4\\n')
+        sys.stdout.write('[download] 100% of  462.12MiB in 00:01:46 at 4.35MiB/s\\n')
+        sys.stdout.write('[Merger] Merging formats into "/tmp/ролик.mkv"\\n')
+        with open(archive, 'a', encoding='utf-8') as fh:
+            fh.write('youtube %s\\n' % ролик)
     sys.exit(0)
     """
 )
@@ -227,3 +246,45 @@ def test_подробность_отказа_попадает_в_журнал(с
 
     проверка = next(m for m in сообщения if "проверка" in m)
     assert "getaddrinfo" in проверка, f"подробности нет: {проверка}"
+
+
+def test_исключённый_ролик_не_качается(стенд):
+    """Снятая галочка обязана убрать ролик из очереди. Иначе весь выбор
+    в окне — украшение: человек снял, а оно всё равно скачалось.
+    """
+    from core.exclusions import parse_exclusions
+
+    config, каталог = стенд
+    итог = запуск(config, exclusions=parse_exclusions("rbYUHA9ZOg8\n"))
+    архив = (каталог / "downloaded.txt").read_text(encoding="utf-8")
+
+    assert "rbYUHA9ZOg8" not in архив
+    assert итог.downloaded == 0
+
+
+def test_про_пропущенное_по_выбору_говорим_вслух(стенд):
+    # Иначе человек решит, что канал сломался: роликов нет, а почему — молчок.
+    from core.exclusions import parse_exclusions
+
+    config, _ = стенд
+    сообщения = []
+    запуск(config, exclusions=parse_exclusions("rbYUHA9ZOg8\n"), on_message=сообщения.append)
+
+    assert any("по вашему выбору" in m for m in сообщения)
+
+
+def test_без_исключений_качается_всё_как_раньше(стенд):
+    config, каталог = стенд
+    итог = запуск(config)
+
+    assert итог.downloaded == 1
+    assert "rbYUHA9ZOg8" in (каталог / "downloaded.txt").read_text(encoding="utf-8")
+
+
+def test_список_очереди_убирается_за_собой(стенд):
+    """Оставленный список собьёт с толку при разборе беды — покажет
+    вчерашнюю очередь как сегодняшнюю.
+    """
+    config, каталог = стенд
+    запуск(config)
+    assert list(каталог.glob("batch-*.txt")) == []

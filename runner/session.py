@@ -18,11 +18,18 @@ from pathlib import Path
 
 from core.archive import parse_archive
 from core.channels import Channel, parse_channels
+from core.exclusions import Exclusions, apply_to
 from core.flow import Action, ChannelResult, SessionSummary, decide_after_probe
 from core.probe import diagnose
 from core.progress import Event, EventKind, parse_line
 from core.supervisor import RetryPolicy, WatchdogPolicy
-from core.ytdlp_args import DownloadSettings, build_args, build_probe_args
+from core.videos import Listing, parse_listing
+from core.ytdlp_args import (
+    DownloadSettings,
+    build_batch_args,
+    build_enumerate_args,
+    build_probe_args,
+)
 from runner.process import run_watched
 
 
@@ -97,11 +104,24 @@ def probe_channel(
     return решение, диагноз
 
 
+def enumerate_channel(channel: Channel, config: SessionConfig) -> Listing:
+    """Переписать канал: идентификаторы, длительности, названия.
+
+    Раньше перепись делал сам yt-dlp внутри загрузки, и вмешаться было
+    некуда. Теперь она наша — только так можно вычесть исключённые ролики.
+    """
+    args = build_enumerate_args(config.settings, channel.url)
+    outcome = run_watched([*config.ytdlp, *args], config.probe_watchdog)
+    return parse_listing(outcome.text)
+
+
 def download_channel(
     channel: Channel,
     config: SessionConfig,
     *,
+    exclusions: Exclusions | None = None,
     on_event: Callable[[Event], None] | None = None,
+    on_message: Callable[[str], None] | None = None,
 ) -> tuple[int, int]:
     """Пройти по каналу. Возвращает (скачано, упало).
 
@@ -111,6 +131,35 @@ def download_channel(
     """
     archive_path = Path(config.settings.archive_path)
     было = _archive_ids(archive_path)
+    исключения = exclusions or Exclusions()
+
+    перепись = enumerate_channel(channel, config)
+    if перепись.unreadable and on_message is not None:
+        on_message(
+            f"{channel.name}: непонятых строк в переписи {len(перепись.unreadable)}"
+        )
+
+    очередь = [v.video_id for v in перепись.videos if v.video_id not in было]
+    всего_до = len(очередь)
+    очередь = apply_to(очередь, исключения)
+    снято = всего_до - len(очередь)
+
+    if снято and on_message is not None:
+        on_message(f"{channel.name}: пропущено по вашему выбору {снято}")
+
+    if not очередь:
+        return 0, 0
+
+    # Список подаётся файлом: у канала бывает шестьсот роликов, и в командную
+    # строку они не влезут.
+    batch = archive_path.parent / f"batch-{channel.name}.txt"
+    try:
+        batch.write_text("\n".join(очередь) + "\n", encoding="utf-8", newline="\n")
+    except OSError as ошибка:
+        if on_message is not None:
+            on_message(f"{channel.name}: не удалось записать список — {ошибка}")
+        return 0, 0
+
     упало = 0
 
     def on_line(line: str) -> None:
@@ -121,8 +170,16 @@ def download_channel(
         if on_event is not None:
             on_event(event)
 
-    args = build_args(config.settings, channel.url)
-    run_watched([*config.ytdlp, *args], config.watchdog, on_line=on_line)
+    try:
+        args = build_batch_args(config.settings, str(batch))
+        run_watched([*config.ytdlp, *args], config.watchdog, on_line=on_line)
+    finally:
+        # Список — вещь одноразовая: оставленный, он собьёт с толку при
+        # разборе беды, показав вчерашнюю очередь как сегодняшнюю.
+        try:
+            batch.unlink()
+        except OSError:
+            pass
 
     стало = _archive_ids(archive_path)
     return len(стало - было), упало
@@ -131,6 +188,7 @@ def download_channel(
 def run_session(
     config: SessionConfig,
     *,
+    exclusions: Exclusions | None = None,
     on_event: Callable[[Event], None] | None = None,
     on_message: Callable[[str], None] | None = None,
     on_channel: Callable[[str, int, int], None] | None = None,
@@ -180,7 +238,10 @@ def run_session(
                 break
             continue
 
-        скачано, упало = download_channel(channel, config, on_event=on_event)
+        скачано, упало = download_channel(
+            channel, config, exclusions=exclusions,
+            on_event=on_event, on_message=on_message,
+        )
         results.append(ChannelResult(channel=channel.name, downloaded=скачано, failed=упало))
         if on_message is not None:
             on_message(f"{channel.name}: скачано {скачано}, упало {упало}")

@@ -129,6 +129,48 @@ def build_args(settings: DownloadSettings, url: str) -> list[str]:
     return args
 
 
+def build_batch_args(settings: DownloadSettings, batch_file: str) -> list[str]:
+    """Аргументы для загрузки готового списка роликов.
+
+    Отличается от `build_args` одним: вместо адреса канала подаётся файл
+    со списком. Это единственный способ учесть исключения — отдав yt-dlp
+    адрес канала, мы отдаём ему и решение, что качать.
+
+    Список подаётся файлом, а не строкой аргументов: у канала бывает
+    шестьсот роликов, и в командную строку они не влезут.
+    """
+    args = [a for a in build_args(settings, "") if a != ""]
+    # Быстрый проход тут бессмыслен: список уже отфильтрован нами,
+    # обрывать его на первом знакомом ролике нечего.
+    if "--break-on-existing" in args:
+        args.remove("--break-on-existing")
+    return [*args, "--batch-file", batch_file]
+
+
+def build_enumerate_args(settings: DownloadSettings, url: str) -> list[str]:
+    """Аргументы для переписи канала: идентификаторы и названия.
+
+    Названия нужны окну выбора роликов — по одному идентификатору человек
+    не поймёт, что снимает.
+    """
+    args: list[str] = []
+    if settings.cookies_file:
+        args += ["--cookies", settings.cookies_file]
+    elif settings.cookies_browser:
+        args += ["--cookies-from-browser", settings.cookies_browser]
+
+    args += [
+        "--js-runtimes", "node",
+        "--extractor-args", "youtubetab:skip=authcheck",
+        "--socket-timeout", str(settings.socket_timeout),
+        "--flat-playlist",
+        "--print", "%(id)s\t%(duration)s\t%(title)s",
+        "--no-warnings",
+        url,
+    ]
+    return args
+
+
 def build_probe_args(settings: DownloadSettings, url: str) -> list[str]:
     """Аргументы для проверки доступа: взять один свежий ролик канала.
 

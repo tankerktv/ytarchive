@@ -160,3 +160,64 @@ def test_проверка_не_качает():
     args = build_probe_args(НАСТРОЙКИ, "URL")
     assert "--download-archive" not in args
     assert пары(args, "--print") == ["%(id)s"]
+
+
+# --- загрузка готовым списком -----------------------------------------------
+
+
+def test_список_подаётся_файлом():
+    """У канала бывает шестьсот роликов — в командную строку они не влезут."""
+    from core.ytdlp_args import build_batch_args
+
+    args = build_batch_args(НАСТРОЙКИ, "F:/архив/_tools/batch.txt")
+    assert пары(args, "--batch-file") == ["F:/архив/_tools/batch.txt"]
+
+
+def test_в_списочном_запуске_нет_адреса_канала():
+    """Отдав yt-dlp адрес канала, мы отдаём ему и решение, что качать —
+    а исключения тогда применить негде.
+    """
+    from core.ytdlp_args import build_batch_args
+
+    args = build_batch_args(НАСТРОЙКИ, "batch.txt")
+    assert not any("youtube.com" in a for a in args)
+
+
+def test_списочный_запуск_сохраняет_важные_ключи():
+    from core.ytdlp_args import build_batch_args
+
+    args = build_batch_args(НАСТРОЙКИ, "batch.txt")
+    assert пары(args, "--js-runtimes") == ["node"]
+    assert "--newline" in args
+    assert "--ignore-errors" in args
+    assert пары(args, "--download-archive") == ["F:/архив/downloaded.txt"]
+
+
+def test_быстрый_проход_в_списочном_запуске_не_нужен():
+    # Список уже отфильтрован нами, обрывать его на знакомом ролике нечего.
+    from core.ytdlp_args import build_batch_args
+
+    настройки = DownloadSettings(
+        archive_path="a", output_template="o", break_on_existing=True
+    )
+    assert "--break-on-existing" not in build_batch_args(настройки, "batch.txt")
+
+
+def test_перепись_отдаёт_название_и_длительность():
+    """По одному идентификатору человек не поймёт, что снимает галочкой."""
+    from core.ytdlp_args import build_enumerate_args
+
+    args = build_enumerate_args(НАСТРОЙКИ, "https://youtube.com/@X/videos")
+    шаблон = пары(args, "--print")[0]
+    assert "%(id)s" in шаблон
+    assert "%(title)s" in шаблон
+    assert "%(duration)s" in шаблон
+    assert "--flat-playlist" in args
+
+
+def test_перепись_ничего_не_качает():
+    from core.ytdlp_args import build_enumerate_args
+
+    args = build_enumerate_args(НАСТРОЙКИ, "URL")
+    assert "--download-archive" not in args
+    assert "-o" not in args
