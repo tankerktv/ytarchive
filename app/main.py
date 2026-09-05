@@ -173,6 +173,14 @@ def cmd_check(args) -> int:
     session = build_session(config, base)
     parsed, _ = _state(session)
 
+    from runner.preflight import чего_не_хватает
+
+    нехватки = чего_не_хватает()
+    for нехватка in нехватки:
+        print(f"  {нехватка}")
+    if нехватки:
+        print()
+
     плохих = 0
     for channel in parsed.channels:
         # Пара, а не одно значение: диагноз нужен циклу выкачки, чтобы не
@@ -186,7 +194,7 @@ def cmd_check(args) -> int:
             print(f"  {channel.name}: доступ есть")
     print()
     print("все каналы отвечают" if not плохих else f"каналов с бедой: {плохих}")
-    return 1 if плохих else 0
+    return 1 if (плохих or нехватки) else 0
 
 
 def один_проход(config: Config, base: Path, session: SessionConfig, should_stop=None):
@@ -369,11 +377,10 @@ def cmd_gui(args) -> int:
         from gui.source import ArchiveSource
         from gui.window import run
     except ImportError as error:
+        from runner.preflight import как_поставить_qt
+
         print(f"окно требует PySide6, а его нет: {error}", file=sys.stderr)
-        print(
-            "поставить:  .venv/Scripts/python.exe -m pip install PySide6-Essentials",
-            file=sys.stderr,
-        )
+        print(f"поставить:  {как_поставить_qt()}", file=sys.stderr)
         return 2
 
     source = ArchiveSource(
