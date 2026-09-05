@@ -46,6 +46,9 @@ from core.config import ConfigError, dump_config, loads, parse_config
 from core.status import RunState, build_status
 from core.ytdlp_args import ALLOWED_HEIGHTS
 from gui.source import ArchiveSource
+from core.i18n import ИСХОДНЫЙ, НАЗВАНИЯ, СИСТЕМНЫЙ, нормализовать
+from core.locales import КАТАЛОГИ
+from runner.language import _, системный_язык
 
 #: Как часто обновляемся. Журнал разрежен, чаще незачем — а лишние чтения
 #: файла с сетевого диска стоят дороже, чем кажется.
@@ -124,7 +127,7 @@ class ПоискКаналов(QThread):
             адрес = fetch_avatar_url(кандидат, self.source.settings, ytdlp=self.source.ytdlp)
             if адрес:
                 ensure_avatar(self.source.avatars_dir, кандидат.channel_id, адрес)
-                self.измерено.emit(номер, replace(кандидат, avatar_url=адрес), "логотип")
+                self.измерено.emit(номер, replace(кандидат, avatar_url=адрес), _("логотип"))
             if self._бросить:
                 break
             измеренный, ответ_меры = measure_channel(
@@ -178,13 +181,13 @@ class Window(QMainWindow):
         # работу там не начинаем вовсе — иначе сборка падала бы без
         # единой строки объяснения, как и случилось.
         self._фоновые = фоновые
-        self.setWindowTitle("Архив YouTube")
+        self.setWindowTitle(_("Архив YouTube"))
         self.resize(940, 640)
 
         self.вкладки = QTabWidget()
-        self.вкладки.addTab(self._вкладка_обзор(), "Обзор")
-        self.вкладки.addTab(self._вкладка_каналы(), "Каналы")
-        self.вкладки.addTab(self._вкладка_настройки(), "Настройки")
+        self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
+        self.вкладки.addTab(self._вкладка_каналы(), _("Каналы"))
+        self.вкладки.addTab(self._вкладка_настройки(), _("Настройки"))
         self.setCentralWidget(self.вкладки)
 
         self._последний_журнал = ""
@@ -210,7 +213,7 @@ class Window(QMainWindow):
         столбец.setContentsMargins(16, 12, 16, 12)
         столбец.setSpacing(10)
 
-        self.заголовок = QLabel("читаю состояние…")
+        self.заголовок = QLabel(_("читаю состояние…"))
         шрифт = self.заголовок.font()
         шрифт.setPointSize(шрифт.pointSize() + 3)
         шрифт.setBold(True)
@@ -241,9 +244,9 @@ class Window(QMainWindow):
         столбец.addWidget(self.полоса_канала)
 
         ряд = QHBoxLayout()
-        self.кнопка_пуск = QPushButton("Запустить")
-        self.кнопка_стоп = QPushButton("Остановить")
-        обновить = QPushButton("Обновить")
+        self.кнопка_пуск = QPushButton(_("Запустить"))
+        self.кнопка_стоп = QPushButton(_("Остановить"))
+        обновить = QPushButton(_("Обновить"))
         for кнопка in (self.кнопка_пуск, self.кнопка_стоп, обновить):
             ряд.addWidget(кнопка)
         ряд.addStretch(1)
@@ -270,8 +273,8 @@ class Window(QMainWindow):
         # --- поиск канала ---
         ряд_поиска = QHBoxLayout()
         self.поле_поиска = QLineEdit()
-        self.поле_поиска.setPlaceholderText("Название канала — например, alex m")
-        self.кнопка_искать = QPushButton("Найти")
+        self.поле_поиска.setPlaceholderText(_("Название канала — например, alex m"))
+        self.кнопка_искать = QPushButton(_("Найти"))
         ряд_поиска.addWidget(self.поле_поиска, 1)
         ряд_поиска.addWidget(self.кнопка_искать)
         столбец.addLayout(ряд_поиска)
@@ -281,7 +284,7 @@ class Window(QMainWindow):
         столбец.addWidget(self.поиск_ответ)
 
         self.находки = QTableWidget(0, 4)
-        self.находки.setHorizontalHeaderLabels(["", "Канал", "Объём", "Влезет"])
+        self.находки.setHorizontalHeaderLabels(["", _("Канал"), _("Объём"), _("Влезет")])
         self.находки.setIconSize(QSize(32, 32))
         self.находки.horizontalHeader().setStretchLastSection(True)
         self.находки.setColumnWidth(0, 44)
@@ -292,7 +295,7 @@ class Window(QMainWindow):
         self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         столбец.addWidget(self.находки)
 
-        self.кнопка_добавить = QPushButton("Добавить выбранный канал")
+        self.кнопка_добавить = QPushButton(_("Добавить выбранный канал"))
         self.кнопка_добавить.setEnabled(False)
         столбец.addWidget(self.кнопка_добавить)
 
@@ -303,21 +306,21 @@ class Window(QMainWindow):
         self._находки: list = []
         self._поиск = None
 
-        столбец.addWidget(QLabel("Сколько уже лежит в архиве по каждому каналу:"))
+        столбец.addWidget(QLabel(_("Сколько уже лежит в архиве по каждому каналу:")))
         self.таблица = QTableWidget(0, 3)
-        self.таблица.setHorizontalHeaderLabels(["Канал", "Файлов", "Объём"])
+        self.таблица.setHorizontalHeaderLabels([_("Канал"), _("Файлов"), _("Объём")])
         self.таблица.horizontalHeader().setStretchLastSection(True)
         self.таблица.setColumnWidth(0, 380)
         self.таблица.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         столбец.addWidget(self.таблица)
 
         столбец.addWidget(QLabel(
-            "Список каналов. Порядок здесь — это порядок обхода: верхний "
-            "забирается первым."
+            _("Список каналов. Порядок здесь — это порядок обхода: верхний "
+            "забирается первым.")
         ))
         ряд_списка = QHBoxLayout()
         self.список_каналов = QTableWidget(0, 4)
-        self.список_каналов.setHorizontalHeaderLabels(["", "Канал", "Файлов", "Объём"])
+        self.список_каналов.setHorizontalHeaderLabels(["", _("Канал"), _("Файлов"), _("Объём")])
         self.список_каналов.horizontalHeader().setStretchLastSection(True)
         self.список_каналов.setColumnWidth(0, 52)
         self.список_каналов.setColumnWidth(1, 330)
@@ -330,12 +333,12 @@ class Window(QMainWindow):
         ряд_списка.addWidget(self.список_каналов, 1)
 
         кнопки = QVBoxLayout()
-        self.кнопка_вверх = QPushButton("↑ Выше")
-        self.кнопка_вниз = QPushButton("↓ Ниже")
-        self.кнопка_убрать = QPushButton("Убрать")
-        self.кнопка_ролики = QPushButton("Выбрать ролики…")
+        self.кнопка_вверх = QPushButton(_("↑ Выше"))
+        self.кнопка_вниз = QPushButton(_("↓ Ниже"))
+        self.кнопка_убрать = QPushButton(_("Убрать"))
+        self.кнопка_ролики = QPushButton(_("Выбрать ролики…"))
         self.кнопка_ролики.setToolTip(
-            "Список роликов канала с галочками. По умолчанию отмечены все."
+            _("Список роликов канала с галочками. По умолчанию отмечены все.")
         )
         for к in (
             self.кнопка_вверх,
@@ -386,8 +389,8 @@ class Window(QMainWindow):
         if окно.exec():
             снято = len(self.source.exclusions())
             self.каналы_ответ.setText(
-                f"выбор сохранён; всего снято роликов по всем каналам: {снято}"
-                + " — вступит в силу со следующего прохода"
+                _('выбор сохранён; всего снято роликов по всем каналам: {}').format(снято)
+                + _(" — вступит в силу со следующего прохода")
             )
 
     def _переставить(self, куда: int) -> None:
@@ -398,7 +401,7 @@ class Window(QMainWindow):
         стало = move_channel(self._каналы, номер, куда)
         if стало == tuple(self._каналы):
             return
-        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)))
+        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)).text)
         self._перечитать_каналы()
         self.список_каналов.selectRow(номер + куда)
 
@@ -410,21 +413,19 @@ class Window(QMainWindow):
         канал = self._каналы[номер]
         ответ = QMessageBox.question(
             self,
-            "Убрать канал",
-            f"Убрать «{канал.name}» из списка?\n\n"
-            "Скачанное останется на диске и в учёте — канал уходит из очереди, "
-            "а не из архива. Вернёте обратно — заново качать не станет.",
+            _("Убрать канал"),
+            _('Убрать «{}» из списка?\n\nСкачанное останется на диске и в учёте — канал уходит из очереди, а не из архива. Вернёте обратно — заново качать не станет.').format(канал.name),
         )
         if ответ != QMessageBox.StandardButton.Yes:
             return
         стало = remove_channel(self._каналы, номер)
-        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)))
+        self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)).text)
         self._перечитать_каналы()
 
     def _искать(self) -> None:
         запрос = self.поле_поиска.text().strip()
         if not запрос:
-            self.поиск_ответ.setText("введите название")
+            self.поиск_ответ.setText(_("введите название"))
             return
         if self._поиск is not None and self._поиск.isRunning():
             self._поиск.бросить()
@@ -433,7 +434,7 @@ class Window(QMainWindow):
         self._находки = []
         self.кнопка_добавить.setEnabled(False)
         self.кнопка_искать.setEnabled(False)
-        self.поиск_ответ.setText("ищу…")
+        self.поиск_ответ.setText(_("ищу…"))
 
         self._поиск = ПоискКаналов(self.source, запрос)
         self._поиск.найдено.connect(self._показать_находки)
@@ -461,7 +462,7 @@ class Window(QMainWindow):
         влезет = fits(кандидат, self.source.free_bytes())
         # Прямо говорим, что неизвестно: «да» по неизмеренному каналу —
         # это обещание, которого мы дать не можем.
-        подпись = {None: "…", True: "да", False: "НЕ ВЛЕЗЕТ"}[влезет]
+        подпись = {None: "…", True: _("да"), False: _("НЕ ВЛЕЗЕТ")}[влезет]
 
         значок = QTableWidgetItem("")
         from runner.avatars import cached_avatar
@@ -492,9 +493,8 @@ class Window(QMainWindow):
         if fits(кандидат, self.source.free_bytes()) is False:
             ответ = QMessageBox.question(
                 self,
-                "Может не влезть",
-                f"По верхней оценке «{кандидат.name}» займёт больше, чем есть свободного места.\n\n"
-                f"{кандидат.describe()}\n\nВсё равно добавить?",
+                _("Может не влезть"),
+                _('По верхней оценке «{}» займёт больше, чем есть свободного места.\n\n{}\n\nВсё равно добавить?').format(кандидат.name, кандидат.describe()),
             )
             if ответ != QMessageBox.StandardButton.Yes:
                 return
@@ -508,8 +508,8 @@ class Window(QMainWindow):
         # Непонятые строки не прячем: иначе человек не узнает, что канал
         # выпал из очереди, а перезапись файла из окна их бы и вовсе стёрла.
         if разбор.problems:
-            беды = "; ".join(f"строка {p.line_number}: {p.reason}" for p in разбор.problems)
-            self.каналы_ответ.setText(f"в файле есть непонятые строки — {беды}")
+            беды = "; ".join(_('строка {}: {}').format(p.line_number, p.reason) for p in разбор.problems)
+            self.каналы_ответ.setText(_('в файле есть непонятые строки — {}').format(беды))
 
         по_папкам = {имя: (файлов, байт) for имя, файлов, байт in self.source.channel_stats()}
         self.список_каналов.setRowCount(len(self._каналы))
@@ -523,7 +523,7 @@ class Window(QMainWindow):
             self.список_каналов.setItem(номер, 1, QTableWidgetItem(канал.name))
             self.список_каналов.setItem(номер, 2, QTableWidgetItem(str(файлов) if файлов else "—"))
             self.список_каналов.setItem(
-                номер, 3, QTableWidgetItem(f"{байт / 1024**3:.1f} ГБ" if байт else "—")
+                номер, 3, QTableWidgetItem(_('{:.1f} ГБ').format(байт / 1024**3) if байт else "—")
             )
         for номер in range(len(self._каналы)):
             self.список_каналов.setRowHeight(номер, 46)
@@ -543,58 +543,72 @@ class Window(QMainWindow):
         # Только чтение: папку выбирают в проводнике, а не набирают руками.
         # Опечатка здесь означает архив, начатый с нуля.
         self.поле_папка.setReadOnly(True)
-        self.кнопка_обзор = QPushButton("Обзор…")
+        self.кнопка_обзор = QPushButton(_("Обзор…"))
         ряд_папки.addWidget(self.поле_папка, 1)
         ряд_папки.addWidget(self.кнопка_обзор)
         обёртка = QWidget()
         обёртка.setLayout(ряд_папки)
-        форма.addRow("Рабочая папка:", обёртка)
+        форма.addRow(_("Рабочая папка:"), обёртка)
+
+        self.поле_язык = QComboBox()
+        # Системный — первым и по умолчанию: чужой язык на первом запуске
+        # хуже отсутствия выбора. В скобках — что это на деле означает,
+        # иначе человеку остаётся гадать.
+        self.поле_язык.addItem(
+            _("Системный язык — {}").format(
+                НАЗВАНИЯ.get(нормализовать(системный_язык()), "?")
+            ),
+            СИСТЕМНЫЙ,
+        )
+        for код in [ИСХОДНЫЙ, *sorted(КАТАЛОГИ)]:
+            self.поле_язык.addItem(НАЗВАНИЯ.get(код, код), код)
+        форма.addRow(_("Язык:"), self.поле_язык)
 
         self.поле_качество = QComboBox()
         for h in ALLOWED_HEIGHTS:
-            self.поле_качество.addItem(f"до {h}p", h)
-        self.поле_av1 = QCheckBox("Предпочитать AV1 (тот же вид, файл меньше)")
-        self.поле_субтитры = QCheckBox("Забирать субтитры")
+            self.поле_качество.addItem(_('до {}p').format(h), h)
+        self.поле_av1 = QCheckBox(_("Предпочитать AV1 (тот же вид, файл меньше)"))
+        self.поле_субтитры = QCheckBox(_("Забирать субтитры"))
         self.поле_молчание = QSpinBox()
         self.поле_молчание.setRange(60, 3600)
-        self.поле_молчание.setSuffix(" с")
+        self.поле_молчание.setSuffix(_(" с"))
         self.поле_пауза_мин = QSpinBox()
         self.поле_пауза_мин.setRange(0, 600)
-        self.поле_пауза_мин.setSuffix(" с")
+        self.поле_пауза_мин.setSuffix(_(" с"))
         self.поле_пауза_макс = QSpinBox()
         self.поле_пауза_макс.setRange(0, 600)
-        self.поле_пауза_макс.setSuffix(" с")
+        self.поле_пауза_макс.setSuffix(_(" с"))
 
-        форма.addRow("Качество:", self.поле_качество)
+        форма.addRow(_("Качество:"), self.поле_качество)
         форма.addRow("", self.поле_av1)
         форма.addRow("", self.поле_субтитры)
-        форма.addRow("Считать зависшим после:", self.поле_молчание)
-        форма.addRow("Пауза между роликами, от:", self.поле_пауза_мин)
-        форма.addRow("до:", self.поле_пауза_макс)
+        форма.addRow(_("Считать зависшим после:"), self.поле_молчание)
+        форма.addRow(_("Пауза между роликами, от:"), self.поле_пауза_мин)
+        форма.addRow(_("до:"), self.поле_пауза_макс)
         столбец.addLayout(форма)
 
         про_папку = QLabel(
-            "Рабочая папка — это и склад роликов, и учёт скачанного. Смена "
+            _("Рабочая папка — это и склад роликов, и учёт скачанного. Смена "
             "папки ничего не переносит: новая папка начинается с того, что "
-            "в ней уже лежит. Выкачка перейдёт на неё со следующего прохода."
+            "в ней уже лежит. Выкачка перейдёт на неё со следующего прохода.")
         )
         про_папку.setWordWrap(True)
         про_папку.setStyleSheet("color: #666;")
         столбец.addWidget(про_папку)
 
         подсказка = QLabel(
-            "Паузы между роликами берегут доступ: на потоке в тысячи запросов "
+            _("Паузы между роликами берегут доступ: на потоке в тысячи запросов "
             "YouTube начинает отвечать «подтвердите, что вы не бот». "
             "Предел молчания должен быть заметно больше самой длинной паузы, "
-            "иначе живую выкачку будут убивать как зависшую."
+            "иначе живую выкачку будут убивать как зависшую.")
         )
         подсказка.setWordWrap(True)
         подсказка.setStyleSheet("color: #666;")
         столбец.addWidget(подсказка)
 
         ряд = QHBoxLayout()
-        сохранить = QPushButton("Сохранить настройки")
-        вернуть = QPushButton("Вернуть как было")
+        сохранить = QPushButton(_("Сохранить настройки"))
+        вернуть = QPushButton(_("Вернуть как было"))
         ряд.addWidget(сохранить)
         ряд.addWidget(вернуть)
         ряд.addStretch(1)
@@ -619,20 +633,20 @@ class Window(QMainWindow):
         from PySide6.QtWidgets import QFileDialog
 
         выбор = QFileDialog.getExistingDirectory(
-            self, "Куда складывать архив", self.поле_папка.text()
+            self, _("Куда складывать архив"), self.поле_папка.text()
         )
         if not выбор:
             return
 
         осмотр = self.source.check_folder(Path(выбор))
         if not осмотр.ok:
-            QMessageBox.warning(self, "Эта папка не подойдёт", осмотр.reason)
+            QMessageBox.warning(self, _("Эта папка не подойдёт"), осмотр.reason)
             return
 
         ответ = QMessageBox.question(
             self,
-            "Сменить рабочую папку?",
-            f"{выбор}\n\n{осмотр.warning}\n\nСменить?",
+            _("Сменить рабочую папку?"),
+            _('{}\n\n{}\n\nСменить?').format(выбор, осмотр.warning),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -640,16 +654,18 @@ class Window(QMainWindow):
             return
 
         self.поле_папка.setText(str(Path(выбор)))
-        self.настройки_ответ.setText("папка сменится при сохранении")
+        self.настройки_ответ.setText(_("папка сменится при сохранении"))
 
     def _перечитать_настройки(self) -> None:
         try:
             config = parse_config(loads(self.source.config_text()))
         except (ConfigError, Exception) as ошибка:  # noqa: BLE001
-            self.настройки_ответ.setText(f"настройки не читаются: {ошибка}")
+            self.настройки_ответ.setText(_('настройки не читаются: {}').format(ошибка))
             return
         self._config = config
         self.поле_папка.setText(config.paths.base)
+        место = self.поле_язык.findData(config.language)
+        self.поле_язык.setCurrentIndex(место if место >= 0 else 0)
         self.поле_качество.setCurrentIndex(ALLOWED_HEIGHTS.index(config.height))
         self.поле_av1.setChecked(config.prefer_av1)
         self.поле_субтитры.setChecked(config.write_subs)
@@ -668,10 +684,12 @@ class Window(QMainWindow):
             sleep_max=self.поле_пауза_макс.value(),
         )
         пути = replace(self._config.paths, base=self.поле_папка.text())
+        язык_сменился = self.поле_язык.currentData() != self._config.language
         сменилась = пути.base != self._config.paths.base
         новый = replace(
             self._config,
             paths=пути,
+            language=self.поле_язык.currentData(),
             height=self.поле_качество.currentData(),
             prefer_av1=self.поле_av1.isChecked(),
             write_subs=self.поле_субтитры.isChecked(),
@@ -683,32 +701,35 @@ class Window(QMainWindow):
             # оставят выкачку без запуска, а человека — без объяснения.
             parse_config(loads(текст))
         except (ConfigError, Exception) as ошибка:  # noqa: BLE001
-            QMessageBox.warning(self, "Не сохранил", str(ошибка))
-            self.настройки_ответ.setText("не сохранено")
+            QMessageBox.warning(self, _("Не сохранил"), str(ошибка))
+            self.настройки_ответ.setText(_("не сохранено"))
             return
         ответ = self.source.write_config(текст)
         self._config = новый
-        if сменилась and not ответ.startswith("не сохранилось"):
+        сообщение = ответ.text
+        if язык_сменился and ответ.ok:
+            сообщение = _("язык окна сменится после перезапуска")
+        if сменилась and ответ.ok:
             # Окно читало старую папку при запуске и продолжит её показывать:
             # умолчать об этом значит показывать вчерашние числа как сегодняшние.
-            ответ = "папка сменена; окно покажет новую после перезапуска"
+            сообщение = _("папка сменена; окно покажет новую после перезапуска")
             QMessageBox.information(
                 self,
-                "Рабочая папка сменена",
-                "Выкачка перейдёт на новую папку со следующего прохода.\n\n"
-                "Это окно показывает прежнюю папку, пока его не перезапустить.",
+                _("Рабочая папка сменена"),
+                _("Выкачка перейдёт на новую папку со следующего прохода.\n\n"
+                "Это окно показывает прежнюю папку, пока его не перезапустить."),
             )
-        self.настройки_ответ.setText(ответ)
+        self.настройки_ответ.setText(сообщение)
 
     # --- трей ---------------------------------------------------------------
 
     def _собрать_трей(self) -> None:
         self.трей = QSystemTrayIcon(нарисовать_значок(ЦВЕТА[RunState.IDLE]), self)
         меню = QMenu()
-        показать = QAction("Показать окно", self)
-        пуск = QAction("Запустить выкачку", self)
-        стоп = QAction("Остановить выкачку", self)
-        выход = QAction("Выйти", self)
+        показать = QAction(_("Показать окно"), self)
+        пуск = QAction(_("Запустить выкачку"), self)
+        стоп = QAction(_("Остановить выкачку"), self)
+        выход = QAction(_("Выйти"), self)
         показать.triggered.connect(self._показаться)
         пуск.triggered.connect(self._пуск)
         стоп.triggered.connect(self._стоп)
@@ -762,8 +783,8 @@ class Window(QMainWindow):
         self.hide()
         if not self._предупредили_о_трее:
             self.трей.showMessage(
-                "Архив YouTube",
-                "Окно свёрнуто в трей. Выкачка идёт сама и от окна не зависит.",
+                _("Архив YouTube"),
+                _("Окно свёрнуто в трей. Выкачка идёт сама и от окна не зависит."),
                 QSystemTrayIcon.MessageIcon.Information,
                 4000,
             )
@@ -789,18 +810,17 @@ class Window(QMainWindow):
         обход_работает = self.source.worker_running()
 
         части = [
-            "обход работает" if обход_работает else "обход не запущен",
-            f"в архиве {снимок.archive_count} роликов",
+            _("обход работает") if обход_работает else _("обход не запущен"),
+            _('в архиве {} роликов').format(снимок.archive_count),
         ]
         if снимок.channel:
-            части.append(f"канал {снимок.channel}")
+            части.append(_('канал {}').format(снимок.channel))
         if снимок.last_size_bytes and снимок.last_speed_bps:
             части.append(
-                f"последний файл {снимок.last_size_bytes / 1024**2:.0f} МБ, "
-                f"{снимок.last_speed_bps / 1024**2:.1f} МБ/с"
+                _('последний файл {:.0f} МБ, {:.1f} МБ/с').format(снимок.last_size_bytes / 1024**2, снимок.last_speed_bps / 1024**2)
             )
         if снимок.errors:
-            части.append(f"отказов в этом сеансе {снимок.errors} — заберутся следующим проходом")
+            части.append(_('отказов в этом сеансе {} — заберутся следующим проходом').format(снимок.errors))
         self.подпись.setText(" · ".join(части))
 
         self._обновить_полосы(снимок)
@@ -809,7 +829,7 @@ class Window(QMainWindow):
         self.кнопка_стоп.setEnabled(обход_работает)
 
         self.трей.setIcon(нарисовать_значок(ЦВЕТА[снимок.state]))
-        self.трей.setToolTip(f"Архив YouTube — {снимок.headline()}")
+        self.трей.setToolTip(_('Архив YouTube — {}').format(снимок.headline()))
 
         текст = "\n".join(строки)
         if текст != self._последний_журнал:
@@ -840,11 +860,11 @@ class Window(QMainWindow):
             self.полоса_файла.setValue(int(живое.percent))
             части = [живое.file_name]
             if живое.size_bytes:
-                части.append(f"{живое.size_bytes / 1024**2:.0f} МБ")
+                части.append(_('{:.0f} МБ').format(живое.size_bytes / 1024**2))
             if живое.speed_bps:
-                части.append(f"{живое.speed_bps / 1024**2:.1f} МБ/с")
+                части.append(_('{:.1f} МБ/с').format(живое.speed_bps / 1024**2))
             if живое.eta:
-                части.append(f"осталось {живое.eta}")
+                части.append(_('осталось {}').format(живое.eta))
             self.подпись_файла.setText(" · ".join(части))
 
         показать_канал = bool(живое and живое.item_total)
@@ -852,9 +872,9 @@ class Window(QMainWindow):
         self.подпись_канала.setVisible(показать_канал)
         if показать_канал:
             self.полоса_канала.setValue(int(живое.item_fraction() * 100))
-            подпись = f"{живое.channel}: ролик {живое.item_index} из {живое.item_total}"
+            подпись = _('{}: ролик {} из {}').format(живое.channel, живое.item_index, живое.item_total)
             if живое.channel_total:
-                подпись += f" · канал {живое.channel_index} из {живое.channel_total}"
+                подпись += _(' · канал {} из {}').format(живое.channel_index, живое.channel_total)
             self.подпись_канала.setText(подпись)
 
     def _обновить_таблицу(self) -> None:
@@ -862,7 +882,7 @@ class Window(QMainWindow):
         if self.таблица.rowCount() != len(строки):
             self.таблица.setRowCount(len(строки))
         for номер, (имя, файлов, байт) in enumerate(строки):
-            значения = (имя, str(файлов), f"{байт / 1024**3:.2f} ГБ")
+            значения = (имя, str(файлов), _('{:.2f} ГБ').format(байт / 1024**3))
             for столбец, значение in enumerate(значения):
                 ячейка = self.таблица.item(номер, столбец)
                 if ячейка is None:

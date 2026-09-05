@@ -15,6 +15,24 @@ from pathlib import Path
 
 from core.locking import LockState, judge_lock
 from runner.lockfile import STALE_AFTER, pid_alive, read_lock
+from runner.language import _
+
+
+@dataclass(frozen=True)
+class Записано:
+    """Чем кончилась попытка записи: признаком, а не текстом.
+
+    Раньше успех отличали по началу сообщения — `startswith("не сохранилось")`.
+    Пока сообщение было одно на всех, это работало. С переводом интерфейса
+    сломалось бы молча и худшим образом: текст на другом языке под проверку
+    не подходит, и окно решило бы, что несохранённое сохранено.
+    """
+
+    ok: bool
+    text: str
+
+    def __str__(self) -> str:  # чтобы годилось прямо в setText
+        return self.text
 
 
 @dataclass
@@ -70,14 +88,14 @@ class ArchiveSource:
 
         разбор = parse_channels(self.channels_text())
         if any(c.name == name for c in разбор.channels):
-            return f"«{name}» уже в списке"
+            return _('«{}» уже в списке').format(name)
         if разбор.problems:
             # Не переписываем файл, в котором есть непонятое: перезапись
             # потеряла бы эти строки молча.
-            return "в списке есть непонятые строки — сначала поправьте их"
+            return _("в списке есть непонятые строки — сначала поправьте их")
         стало = (*разбор.channels, Channel(name=name, url=url))
         ответ = self.write_channels(format_channels(стало))
-        return f"{ответ}: добавлен «{name}»" if "сохранён" in ответ else ответ
+        return _('{}: добавлен «{}»').format(ответ, name) if ответ.ok else ответ.text
 
     def log_tail(self, lines: int) -> list[str]:
         """Хвост самого свежего журнала.
@@ -96,7 +114,7 @@ class ArchiveSource:
         try:
             текст = журналы[0].read_text(encoding="utf-8", errors="replace")
         except OSError as ошибка:
-            return [f"журнал не читается: {ошибка}"]
+            return [_('журнал не читается: {}').format(ошибка)]
         return текст.splitlines()[-lines:]
 
     def archive_text(self) -> str:
@@ -111,10 +129,10 @@ class ArchiveSource:
         except OSError:
             return ""
 
-    def write_channels(self, text: str) -> str:
+    def write_channels(self, text: str) -> Записано:
         """Записать список каналов. Сначала копия — файл правит человек,
         и потерять его из-за нашей ошибки нельзя."""
-        return self._write(self.channels_path, text, "список каналов сохранён")
+        return self._write(self.channels_path, text, _("список каналов сохранён"))
 
     # --- снятые галочки -----------------------------------------------------
 
@@ -131,7 +149,7 @@ class ArchiveSource:
         except OSError:
             return Exclusions()
 
-    def write_exclusions(self, video_ids) -> str:
+    def write_exclusions(self, video_ids) -> Записано:
         """Записать снятые галочки.
 
         Пишем весь список целиком, а не правим построчно: окно знает полную
@@ -140,7 +158,7 @@ class ArchiveSource:
         from core.exclusions import format_exclusions
 
         return self._write(
-            self.excluded_file, format_exclusions(set(video_ids)), "выбор сохранён"
+            self.excluded_file, format_exclusions(set(video_ids)), _("выбор сохранён")
         )
 
     @property
@@ -214,7 +232,7 @@ class ArchiveSource:
         if каталог:
             try:
                 # Считать всё дерево незачем: хватает знания «пусто или нет».
-                внутри = sum(1 for _ in itertools.islice(путь.iterdir(), 1))
+                внутри = sum(1 for _файл in itertools.islice(путь.iterdir(), 1))
             except OSError:
                 внутри = 0
 
@@ -249,10 +267,10 @@ class ArchiveSource:
         except OSError:
             return ""
 
-    def write_config(self, text: str) -> str:
-        return self._write(self.config_path, text, "настройки сохранены — вступят в силу со следующего прохода")
+    def write_config(self, text: str) -> Записано:
+        return self._write(self.config_path, text, _("настройки сохранены — вступят в силу со следующего прохода"))
 
-    def _write(self, path: Path, text: str, успех: str) -> str:
+    def _write(self, path: Path, text: str, успех: str) -> Записано:
         try:
             if path.exists():
                 path.with_suffix(path.suffix + ".bak").write_text(
@@ -260,8 +278,8 @@ class ArchiveSource:
                 )
             path.write_text(text, encoding="utf-8", newline="\n")
         except OSError as ошибка:
-            return f"не сохранилось: {ошибка}"
-        return успех
+            return Записано(False, _('не сохранилось: {}').format(ошибка))
+        return Записано(True, успех)
 
     def channel_stats(self) -> list[tuple[str, int, int]]:
         """Сколько файлов и байт лежит в папке каждого канала.
@@ -337,7 +355,7 @@ class ArchiveSource:
         from runner.daemon import clear_stop, daemon_running
 
         if daemon_running(self.tools_dir):
-            return "уже работает"
+            return _("уже работает")
 
         # Просьба остановиться могла остаться с прошлого раза: не сняв её,
         # новый экземпляр встанет сразу же.
@@ -362,19 +380,19 @@ class ArchiveSource:
                 start_new_session=sys.platform != "win32",
             )
         except OSError as ошибка:
-            return f"не вышло запустить: {ошибка}"
-        return "запустил"
+            return _('не вышло запустить: {}').format(ошибка)
+        return _("запустил")
 
     def stop(self) -> str:
         from runner.daemon import ask_stop, daemon_running
 
         if not daemon_running(self.tools_dir):
-            return "никто не работает"
+            return _("никто не работает")
         try:
             ask_stop(self.tools_dir)
         except OSError as ошибка:
-            return f"не вышло остановить: {ошибка}"
-        return "попросил остановиться — уйдёт, договорив текущий ролик"
+            return _('не вышло остановить: {}').format(ошибка)
+        return _("попросил остановиться — уйдёт, договорив текущий ролик")
 
     def _worker_argv(self) -> list[str]:
         """Чем запускать обход. Без консольного окна там, где это различают."""

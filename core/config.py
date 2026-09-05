@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.i18n import НАЗВАНИЯ, СИСТЕМНЫЙ
 from core.schedule import Rhythm
 
 # tomllib появился в 3.11. На машине, где это писалось, настоящий
@@ -26,7 +27,10 @@ except ModuleNotFoundError:  # pragma: no cover — ветка для 3.10
 from core.ytdlp_args import ALLOWED_HEIGHTS
 
 #: Ключи, которые мы понимаем. Всё остальное — повод пожаловаться.
-KNOWN_SECTIONS = {"paths", "download", "limits", "schedule"}
+KNOWN_SECTIONS = {"paths", "download", "limits", "schedule", "interface"}
+#: Язык интерфейса. Отдельным разделом, а не в [download]: он про окно,
+#: а не про то, что и как качать.
+KNOWN_INTERFACE = {"language"}
 #: Паузы задаются минутами: секунды в настройках, которые правит человек,
 #: читаются плохо — «1800» надо ещё поделить в уме.
 KNOWN_SCHEDULE = {"pause_idle", "pause_busy", "pause_trouble"}
@@ -71,6 +75,9 @@ class Config:
     #: Ритм проходов. Раньше его задавал планировщик Windows — «каждые
     #: полчаса», одинаково на все случаи.
     rhythm: Rhythm = field(default_factory=Rhythm)
+    #: Язык интерфейса. «system» значит «спросить у системы» — так и стоит
+    #: по умолчанию: чужой язык на первом запуске хуже отсутствия выбора.
+    language: str = СИСТЕМНЫЙ
 
 
 def loads(text: str) -> dict:
@@ -153,9 +160,23 @@ def parse_config(data: dict) -> Config:
     except (TypeError, ValueError) as ошибка:
         raise ConfigError(f"раздел [schedule]: {ошибка}") from ошибка
 
+    raw_interface = data.get("interface", {})
+    if not isinstance(raw_interface, dict):
+        raise ConfigError("раздел [interface] должен быть таблицей")
+    _check_unknown("interface", raw_interface, KNOWN_INTERFACE)
+    language = str(raw_interface.get("language", СИСТЕМНЫЙ)).strip() or СИСТЕМНЫЙ
+    if language != СИСТЕМНЫЙ and language not in НАЗВАНИЯ:
+        # Опечатку тут молча не прощаем: «ne» вместо «de» дало бы английский,
+        # и человек до последнего думал бы, что перевода просто нет.
+        raise ConfigError(
+            f"language = {language!r} — такого языка не знаю. Понятные значения: "
+            f"{СИСТЕМНЫЙ}, {', '.join(sorted(НАЗВАНИЯ))}"
+        )
+
     return Config(
         paths=paths,
         rhythm=rhythm,
+        language=language,
         height=height,
         prefer_av1=bool(raw_download.get("prefer_av1", True)),
         write_subs=bool(raw_download.get("write_subs", True)),
@@ -223,6 +244,10 @@ pause_idle = {config.rhythm.idle / 60:g}
 pause_busy = {config.rhythm.busy / 60:g}
 # Нужен человек (истёкшие куки, устаревший yt-dlp): долбиться в стену незачем.
 pause_trouble = {config.rhythm.trouble / 60:g}
+
+[interface]
+# Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.
+language = {_toml_str(config.language)}
 """
 
 
@@ -268,4 +293,8 @@ socket_timeout = 30
 pause_idle = 30
 pause_busy = 1
 pause_trouble = 60
+
+[interface]
+# Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.
+language = "system"
 """

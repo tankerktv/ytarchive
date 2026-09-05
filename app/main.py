@@ -359,6 +359,12 @@ def cmd_gui(args) -> int:
     archive = resolve(base, config.paths.archive)
     session = build_session(config, base)
 
+    # Язык выбирается ДО постройки окна: надписи берутся при создании
+    # виджетов, и опоздав, мы получили бы наполовину переведённое окно.
+    from runner.language import настроить
+
+    настроить(config.language)
+
     try:
         from gui.source import ArchiveSource
         from gui.window import run

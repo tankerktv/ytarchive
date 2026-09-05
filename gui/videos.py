@@ -32,13 +32,17 @@ from PySide6.QtWidgets import (
 from core.archive import parse_archive
 from core.exclusions import merge
 from core.videos import Listing, search
+from runner.language import _
 
 #: Размер миниатюры в списке. mqdefault — 320×180, показываем меньше:
 #: строка со стокилобайтной картинкой в полный рост нечитаема.
 МИНИАТЮРА = QSize(96, 54)
 ПРЕДПРОСМОТР = QSize(320, 180)
 
-СТОЛБЦЫ = ["", "", "Название", "Длительность", "Состояние"]
+def столбцы() -> list[str]:
+    """Заголовки таблицы. Функция, а не константа: константу пришлось бы
+    вычислить при импорте, то есть до того, как выбран язык."""
+    return ["", "", _("Название"), _("Длительность"), _("Состояние")]
 
 #: Сколько ждём поток при закрытии. Больше — и закрытие окна начнёт
 #: подвисать на глазах; меньше — не хватит даже на то, чтобы снять yt-dlp.
@@ -56,6 +60,8 @@ def _отпустить(поток) -> None:
     if поток is None:
         return
 
+    # Имя метода, а не надпись: переведи его — и остановка потоков молча
+    # перестанет работать на любом языке, кроме русского.
     бросить = getattr(поток, "бросить", None)
     if бросить is not None:
         бросить()
@@ -155,7 +161,7 @@ class ОкноРоликов(QDialog):
         #: Самопроверка строит окно без сети: перепись подставляется руками,
         #: и тянуть миниатюры на выдуманные идентификаторы незачем.
         self._фоновые = фоновые
-        self.setWindowTitle(f"Ролики канала «{канал}»")
+        self.setWindowTitle(_('Ролики канала «{}»').format(канал))
         self.resize(1180, 720)
 
         self._видео: list = []
@@ -168,29 +174,29 @@ class ОкноРоликов(QDialog):
 
         корень = QVBoxLayout(self)
 
-        self.заголовок = QLabel(f"Читаю список роликов канала «{канал}»…")
+        self.заголовок = QLabel(_('Читаю список роликов канала «{}»…').format(канал))
         self.заголовок.setStyleSheet("font-size: 15px; font-weight: bold;")
         корень.addWidget(self.заголовок)
 
         корень.addWidget(QLabel(
-            "Отмечено — будет скачано. Снятая галочка не удаляет уже скачанное: "
-            "она про будущие проходы."
+            _("Отмечено — будет скачано. Снятая галочка не удаляет уже скачанное: "
+            "она про будущие проходы.")
         ))
 
         ряд_поиска = QHBoxLayout()
         self.поиск = QLineEdit()
-        self.поиск.setPlaceholderText("Поиск по названию")
+        self.поиск.setPlaceholderText(_("Поиск по названию"))
         self.поиск.setClearButtonEnabled(True)
         ряд_поиска.addWidget(self.поиск, 1)
-        self.кнопка_все = QPushButton("Отметить показанные")
-        self.кнопка_никого = QPushButton("Снять показанные")
+        self.кнопка_все = QPushButton(_("Отметить показанные"))
+        self.кнопка_никого = QPushButton(_("Снять показанные"))
         ряд_поиска.addWidget(self.кнопка_все)
         ряд_поиска.addWidget(self.кнопка_никого)
         корень.addLayout(ряд_поиска)
 
         ряд = QHBoxLayout()
-        self.таблица = QTableWidget(0, len(СТОЛБЦЫ))
-        self.таблица.setHorizontalHeaderLabels(СТОЛБЦЫ)
+        self.таблица = QTableWidget(0, len(столбцы()))
+        self.таблица.setHorizontalHeaderLabels(столбцы())
         self.таблица.setColumnWidth(0, 34)
         self.таблица.setColumnWidth(1, 110)
         self.таблица.setColumnWidth(2, 460)
@@ -209,8 +215,8 @@ class ОкноРоликов(QDialog):
         self.счётчик = QLabel("")
         self.счётчик.setStyleSheet("color: #666;")
         нижний.addWidget(self.счётчик, 1)
-        self.кнопка_сохранить = QPushButton("Сохранить выбор")
-        self.кнопка_закрыть = QPushButton("Закрыть")
+        self.кнопка_сохранить = QPushButton(_("Сохранить выбор"))
+        self.кнопка_закрыть = QPushButton(_("Закрыть"))
         self.кнопка_сохранить.setEnabled(False)
         нижний.addWidget(self.кнопка_сохранить)
         нижний.addWidget(self.кнопка_закрыть)
@@ -244,7 +250,7 @@ class ОкноРоликов(QDialog):
         self.картинка.setFixedSize(ПРЕДПРОСМОТР)
         self.картинка.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.картинка.setStyleSheet("background: #1b1b1b; color: #888;")
-        self.картинка.setText("выберите ролик")
+        self.картинка.setText(_("выберите ролик"))
         столбец.addWidget(self.картинка)
 
         self.название = QLabel("")
@@ -257,7 +263,7 @@ class ОкноРоликов(QDialog):
         self.подпись.setWordWrap(True)
         столбец.addWidget(self.подпись)
 
-        self.кнопка_открыть = QPushButton("Открыть на YouTube")
+        self.кнопка_открыть = QPushButton(_("Открыть на YouTube"))
         self.кнопка_открыть.setEnabled(False)
         self.кнопка_открыть.clicked.connect(self._открыть_в_браузере)
         столбец.addWidget(self.кнопка_открыть)
@@ -287,11 +293,11 @@ class ОкноРоликов(QDialog):
 
         путь = cached_image(self.source.thumbs_dir, ролик.video_id)
         if путь is None:
-            self.картинка.setText("миниатюра ещё не скачана")
+            self.картинка.setText(_("миниатюра ещё не скачана"))
             return
         картинка = QPixmap(str(путь))
         if картинка.isNull():
-            self.картинка.setText("миниатюра не читается")
+            self.картинка.setText(_("миниатюра не читается"))
             return
         self.картинка.setPixmap(
             картинка.scaled(
@@ -322,12 +328,11 @@ class ОкноРоликов(QDialog):
 
         if not self._видео:
             self.заголовок.setText(
-                f"«{self.канал}»: список получить не удалось — "
-                f"сеть или вход в аккаунт. Выбор не тронут."
+                _('«{}»: список получить не удалось — сеть или вход в аккаунт. Выбор не тронут.').format(self.канал)
             )
             return
 
-        self.заголовок.setText(f"«{self.канал}»: роликов {len(self._видео)}")
+        self.заголовок.setText(_('«{}»: роликов {}').format(self.канал, len(self._видео)))
         self.кнопка_сохранить.setEnabled(True)
         self._перерисовать()
 
@@ -356,10 +361,10 @@ class ОкноРоликов(QDialog):
 
     def _состояние(self, ролик) -> str:
         if ролик.video_id in self._скачанные:
-            return "скачан"
+            return _("скачан")
         if ролик.video_id in self._снятые:
-            return "снят"
-        return "в очереди"
+            return _("снят")
+        return _("в очереди")
 
     def _перерисовать(self) -> None:
         from runner.images import cached_image
@@ -405,10 +410,10 @@ class ОкноРоликов(QDialog):
         всего = len(self._видео)
         снято = len(self._снятые)
         показано = len(self._видимые)
-        хвост = f", показано {показано}" if показано != всего else ""
+        хвост = _(', показано {}').format(показано) if показано != всего else ""
         self.счётчик.setText(
-            f"отмечено {всего - снято} из {всего}{хвост}"
-            + (f"; снято {снято}" if снято else "")
+            _('отмечено {} из {}{}').format(всего - снято, всего, хвост)
+            + (_('; снято {}').format(снято) if снято else "")
         )
 
     def _галочка(self, item) -> None:
@@ -446,12 +451,12 @@ class ОкноРоликов(QDialog):
         try:
             итог = merge(self.source.exclusions(), известные, self._снятые & известные)
         except ValueError as ошибка:
-            QMessageBox.warning(self, "Выбор не сохранён", str(ошибка))
+            QMessageBox.warning(self, _("Выбор не сохранён"), str(ошибка))
             return
 
         ответ = self.source.write_exclusions(итог.video_ids)
-        if ответ.startswith("не сохранилось"):
-            QMessageBox.warning(self, "Выбор не сохранён", ответ)
+        if not ответ.ok:
+            QMessageBox.warning(self, _("Выбор не сохранён"), ответ.text)
             return
         self.accept()
 

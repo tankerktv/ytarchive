@@ -26,6 +26,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from core.exclusions import Exclusions, parse_exclusions  # noqa: E402
+from gui.source import Записано  # noqa: E402
 from core.videos import Listing, Video  # noqa: E402
 from gui.videos import ОкноРоликов  # noqa: E402
 
@@ -53,9 +54,9 @@ class ПоддельныйИсточник:
     def exclusions(self) -> Exclusions:
         return parse_exclusions(self._исключения)
 
-    def write_exclusions(self, video_ids) -> str:
+    def write_exclusions(self, video_ids):
         self.записано = set(video_ids)
-        return "выбор сохранён"
+        return Записано(True, "выбор сохранён")
 
     def listing(self, channel_name, should_stop=None):
         return ПЕРЕПИСЬ
