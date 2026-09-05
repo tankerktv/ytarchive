@@ -24,7 +24,15 @@ class ПоддельныйАрхив:
 
 @pytest.fixture
 def стенд(monkeypatch, tmp_path):
-    """Настройки и состояние подменены; остаётся сама команда."""
+    """Настройки и состояние подменены; остаётся сама команда.
+
+    Готовность окружения тоже подменяется: без этого проверка зависела бы
+    от того, стоит ли yt-dlp на машине, где её гоняют. Поймано на Linux —
+    там его не было, и `check` честно возвращал единицу.
+    """
+    import runner.preflight
+
+    monkeypatch.setattr(runner.preflight, "чего_не_хватает", lambda **_: [])
     from core.config import loads, parse_config
 
     config = parse_config(loads(f'[paths]\nbase = "{tmp_path.as_posix()}"\n'))
@@ -97,3 +105,27 @@ def test_образец_настроек_не_содержит_чужих_пут
 
     assert HOME_MARK not in текст, "метка осталась неподставленной"
     assert "Movies" not in текст
+
+
+def test_нехватка_программ_видна_кодом_возврата(стенд, monkeypatch, capsys):
+    """«Все каналы отвечают» при отсутствии yt-dlp — это ложь, за которой
+    следует непонятный отказ через полчаса.
+    """
+    import runner.preflight
+    from runner.preflight import Нехватка
+
+    monkeypatch.setattr(
+        runner.preflight, "чего_не_хватает",
+        lambda **_: [Нехватка(чего="yt-dlp", зачем="качать нечем", как="pip install yt-dlp")],
+    )
+    monkeypatch.setattr(
+        app_main, "probe_channel",
+        lambda channel, session, **kwargs: (Decision(action=Action.PROCEED), None),
+    )
+
+    код = app_main.cmd_check(Аргументы())
+    вывод = capsys.readouterr().out
+
+    assert код == 1
+    assert "yt-dlp" in вывод
+    assert "pip install" in вывод
