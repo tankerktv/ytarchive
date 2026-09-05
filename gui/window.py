@@ -708,7 +708,14 @@ class Window(QMainWindow):
         self._config = новый
         сообщение = ответ.text
         if язык_сменился and ответ.ok:
-            сообщение = _("язык окна сменится после перезапуска")
+            from runner.language import настроить
+
+            настроить(self.поле_язык.currentData())
+            # Через singleShot, а не прямо здесь: пересборка удалит ту самую
+            # кнопку, из обработчика которой мы сейчас выполняемся. Удалять
+            # виджет внутри его же сигнала — верный способ уронить Qt.
+            QTimer.singleShot(0, self._язык_сменён)
+            сообщение = ""
         if сменилась and ответ.ok:
             # Окно читало старую папку при запуске и продолжит её показывать:
             # умолчать об этом значит показывать вчерашние числа как сегодняшние.
@@ -725,6 +732,17 @@ class Window(QMainWindow):
 
     def _собрать_трей(self) -> None:
         self.трей = QSystemTrayIcon(нарисовать_значок(ЦВЕТА[RunState.IDLE]), self)
+        self.трей.setContextMenu(self._меню_трея())
+        self.трей.activated.connect(
+            lambda причина: self._показаться()
+            if причина == QSystemTrayIcon.ActivationReason.DoubleClick
+            else None
+        )
+        self.трей.show()
+
+    def _меню_трея(self) -> QMenu:
+        """Меню трея отдельно от значка: при смене языка пересобирается оно,
+        а значок остаётся на месте и не мигает."""
         меню = QMenu()
         показать = QAction(_("Показать окно"), self)
         пуск = QAction(_("Запустить выкачку"), self)
@@ -738,13 +756,49 @@ class Window(QMainWindow):
             меню.addAction(пункт)
         меню.addSeparator()
         меню.addAction(выход)
-        self.трей.setContextMenu(меню)
-        self.трей.activated.connect(
-            lambda причина: self._показаться()
-            if причина == QSystemTrayIcon.ActivationReason.DoubleClick
-            else None
-        )
-        self.трей.show()
+        # Меню держим за окном: без ссылки Qt соберёт его мусорщиком,
+        # и щелчок по трею откроет пустоту.
+        self._меню = меню
+        return меню
+
+    def _язык_сменён(self) -> None:
+        """Пересобрать окно и сказать об этом уже на новом языке."""
+        self.перестроить()
+        self.настройки_ответ.setText(_("язык сменён"))
+
+    def перестроить(self) -> None:
+        """Собрать окно заново — например, после смены языка.
+
+        Именно пересобрать, а не переписать подписи по одной. Переписывание
+        неизбежно что-нибудь пропускает, и пропущенное молча остаётся на
+        прежнем языке: заметит это не разработчик, а человек, которому
+        неудобно. Пересборка промахнуться не может.
+
+        Окно, положение и потоки остаются те же — меняется только его нутро.
+        """
+        вкладка = self.вкладки.currentIndex()
+
+        self.setWindowTitle(_("Архив YouTube"))
+        прежние = self.centralWidget()
+
+        self.вкладки = QTabWidget()
+        self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
+        self.вкладки.addTab(self._вкладка_каналы(), _("Каналы"))
+        self.вкладки.addTab(self._вкладка_настройки(), _("Настройки"))
+        self.setCentralWidget(self.вкладки)
+
+        # Прежнее дерево приходится убирать руками: сам по себе setCentralWidget
+        # его не удаляет, а оставляет ребёнком окна. Проверено — после смены
+        # языка в окне оказалось двадцать четыре подписи вместо двенадцати,
+        # немецкие вперемешку с русскими. На каждой смене копилась бы копия.
+        if прежние is not None:
+            прежние.setParent(None)
+            прежние.deleteLater()
+        self.вкладки.setCurrentIndex(вкладка)
+
+        self.трей.setContextMenu(self._меню_трея())
+        self._последний_журнал = ""  # перерисовать журнал целиком
+        self.обновить()
 
     def _показаться(self) -> None:
         self.showNormal()
@@ -801,7 +855,7 @@ class Window(QMainWindow):
             archive_count=len(архив),
         )
 
-        self.заголовок.setText(снимок.headline())
+        self.заголовок.setText(снимок.headline(_))
         self.заголовок.setStyleSheet(f"color: {ЦВЕТА[снимок.state]};")
 
         # «Работает» и «качает прямо сейчас» — разные вещи: между проходами
@@ -829,7 +883,7 @@ class Window(QMainWindow):
         self.кнопка_стоп.setEnabled(обход_работает)
 
         self.трей.setIcon(нарисовать_значок(ЦВЕТА[снимок.state]))
-        self.трей.setToolTip(_('Архив YouTube — {}').format(снимок.headline()))
+        self.трей.setToolTip(_('Архив YouTube — {}').format(снимок.headline(_)))
 
         текст = "\n".join(строки)
         if текст != self._последний_журнал:

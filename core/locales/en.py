@@ -172,6 +172,14 @@
         'Language:',
     'Системный язык — {}':
         'System language — {}',
-    'язык окна сменится после перезапуска':
-        'the window language will change after a restart',
+    'язык сменён':
+        'language changed',
+    'качает':
+        'downloading',
+    'пауза между роликами':
+        'pause between videos',
+    'не запущена':
+        'not running',
+    'остановлена, нужен человек':
+        'stopped, needs you',
 }

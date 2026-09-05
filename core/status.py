@@ -41,15 +41,22 @@ class Status:
     last_message: str = ""
     stopped_reason: str = ""
 
-    def headline(self) -> str:
-        """Одна строка для шапки окна."""
+    def headline(self, перевод=str) -> str:
+        """Одна строка для шапки окна.
+
+        Переводчик передаётся доводом, а не берётся из общего места: ядру
+        нельзя знать ни про язык интерфейса, ни про то, откуда он берётся.
+        По умолчанию — тождественный, то есть по-русски, как в исходнике.
+        """
+        состояние = перевод(self.state.value)
         if self.state is RunState.NEEDS_HUMAN:
-            return f"{self.state.value}: {self.stopped_reason}"
+            return f"{состояние}: {self.stopped_reason}"
         if self.state is RunState.IDLE:
-            return f"{self.state.value} · в архиве {self.archive_count}"
+            сколько = перевод("в архиве {} роликов").format(self.archive_count)
+            return f"{состояние} · {сколько}"
         if self.current_file:
-            return f"{self.state.value}: {self.current_file}"
-        return self.state.value
+            return f"{состояние}: {self.current_file}"
+        return состояние
 
 
 #: Приметы сообщений цикла. Держим здесь, а не в окне: окно не должно

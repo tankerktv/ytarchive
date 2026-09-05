@@ -245,6 +245,14 @@
         'Langue :',
     'Системный язык — {}':
         'Langue du système — {}',
-    'язык окна сменится после перезапуска':
-        'la langue de la fenêtre changera après un redémarrage',
+    'язык сменён':
+        'langue changée',
+    'качает':
+        'téléchargement',
+    'пауза между роликами':
+        'pause entre vidéos',
+    'не запущена':
+        'arrêtée',
+    'остановлена, нужен человек':
+        'arrêtée, votre intervention est requise',
 }
