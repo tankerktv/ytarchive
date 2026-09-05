@@ -359,10 +359,58 @@ def cmd_stop(args) -> int:
     return 0
 
 
+def первый_запуск(путь: Path) -> int:
+    """Спросить язык и рабочую папку, когда настроек ещё нет.
+
+    Иначе программа, скачанная из репозитория, встречает человека отказом
+    «нет файла настроек» и советом сходить в командную строку. Для того,
+    кто пришёл за окном, это тупик.
+    """
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        from gui.firstrun import настройки_для, спросить
+    except ImportError as error:
+        from runner.preflight import как_поставить_qt
+
+        print(f"окно требует PySide6, а его нет: {error}", file=sys.stderr)
+        print(f"поставить:  {как_поставить_qt()}", file=sys.stderr)
+        return 2
+
+    from core.i18n import СИСТЕМНЫЙ
+    from runner.language import настроить
+
+    # До первого разговора языка ещё нет — берём у системы.
+    настроить(СИСТЕМНЫЙ)
+    QApplication.instance() or QApplication(sys.argv)
+
+    ответ = спросить()
+    if ответ is None:
+        print("настройки не созданы — запустите ещё раз, когда решите, куда качать")
+        return 0  # отказ это право человека, а не беда
+
+    папка, язык = ответ
+    try:
+        папка.mkdir(parents=True, exist_ok=True)
+        путь.write_text(настройки_для(папка, язык), encoding="utf-8", newline="\n")
+    except OSError as ошибка:
+        print(f"настройки не записались: {ошибка}", file=sys.stderr)
+        return 1
+
+    print(f"создан {путь}: архив в {папка}")
+    return 0
+
+
 def cmd_gui(args) -> int:
     """Окно наблюдения. Qt подтягивается только здесь: командная строка
     и фоновое задание не должны требовать его установки."""
-    config, _ = load_config(Path(args.config))
+    путь = Path(args.config)
+    if not путь.exists():
+        код = первый_запуск(путь)
+        if код != 0 or not путь.exists():
+            return код
+
+    config, _ = load_config(путь)
     base = Path(config.paths.base)
     archive = resolve(base, config.paths.archive)
     session = build_session(config, base)
@@ -390,7 +438,7 @@ def cmd_gui(args) -> int:
         lock_path=archive.parent / "ytarchive.lock",
         channels_path=resolve(base, config.paths.channels),
         excluded_path=resolve(base, config.paths.excluded),
-        config_path=Path(args.config),
+        config_path=путь,
         live_path=archive.parent / "ytarchive-live.json",
         settings=session.settings,
         ytdlp=session.ytdlp,

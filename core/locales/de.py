@@ -255,4 +255,16 @@
         'nicht gestartet',
     'остановлена, нужен человек':
         'angehalten, Eingriff nötig',
+    'Архив YouTube — первый запуск':
+        'YouTube-Archiv — erster Start',
+    'Программа будет забирать новые ролики с выбранных каналов сама.':
+        'Das Programm holt neue Videos der gewählten Kanäle von selbst.',
+    'Ролики скачиваются целиком, и места им нужно много: час видео — от 0,6 до 1,6 ГБ, а канал целиком легко занимает сотни гигабайт. Выберите папку на диске, где есть запас.':
+        'Videos werden vollständig geladen und brauchen viel Platz: eine Stunde Video sind 0,6 bis 1,6 GB, ein ganzer Kanal leicht mehrere hundert Gigabyte. Wählen Sie einen Ordner auf einer Platte mit Reserve.',
+    'Папка не выбрана':
+        'Kein Ordner gewählt',
+    'Готово':
+        'Fertig',
+    'Отмена':
+        'Abbrechen',
 }

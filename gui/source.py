@@ -35,6 +35,72 @@ class Записано:
         return self.text
 
 
+def доступна_запись(путь: Path) -> bool:
+    """Проверяем записью, а не правами: на сетевых дисках и в OneDrive
+    права говорят одно, а запись кончается отказом."""
+    проба = путь / ".ytarchive-проба"
+    try:
+        проба.write_text("", encoding="utf-8")
+    except OSError:
+        return False
+    try:
+        проба.unlink()
+    except OSError:
+        pass
+    return True
+
+
+def осмотреть_папку(path: Path, *, учёт: str, нынешняя: Path | None = None):
+    """Годится ли папка под архив и чем грозит.
+
+    Свободной функцией, а не методом источника: у мастера первого запуска
+    источника ещё нет — настроек, из которых его собрать, тоже.
+
+    Факты собираются здесь, решение принимает `core.workdir` — так его можно
+    проверить без дисков и без прав.
+    """
+    from core.archive import parse_archive
+    from core.workdir import judge_folder
+
+    путь = Path(path)
+    существует = путь.exists()
+    каталог = путь.is_dir() if существует else False
+
+    файл_учёта = (путь / учёт) if учёт else None
+    есть_учёт = bool(файл_учёта and файл_учёта.is_file())
+    сколько = 0
+    if есть_учёт:
+        try:
+            сколько = len(parse_archive(файл_учёта.read_text(encoding="utf-8")).video_ids)
+        except OSError:
+            есть_учёт = False
+
+    внутри = 0
+    if каталог:
+        try:
+            # Считать всё дерево незачем: хватает знания «пусто или нет».
+            внутри = sum(1 for _файл in itertools.islice(путь.iterdir(), 1))
+        except OSError:
+            внутри = 0
+
+    та_же = False
+    if каталог and нынешняя is not None:
+        try:
+            та_же = путь.resolve() == Path(нынешняя).resolve()
+        except OSError:
+            та_же = False
+
+    return judge_folder(
+        exists=существует,
+        is_dir=каталог,
+        writable=доступна_запись(путь) if каталог else False,
+        has_archive=есть_учёт,
+        archive_count=сколько,
+        files_inside=внутри,
+        same_as_now=та_же,
+    )
+
+
 @dataclass
 class ArchiveSource:
     """Настоящий источник: файлы архива и отдельный процесс выкачки."""
@@ -207,59 +273,10 @@ class ArchiveSource:
             return ""
 
     def check_folder(self, path: Path):
-        """Осмотреть папку под архив: годится ли и чем грозит.
-
-        Факты собираются здесь, решение принимает `core.workdir` — так его
-        можно проверить без дисков и без прав.
-        """
-        from core.archive import parse_archive
-        from core.workdir import judge_folder
-
-        путь = Path(path)
-        существует = путь.exists()
-        каталог = путь.is_dir() if существует else False
-
-        учёт = (путь / self.archive_relative) if self.archive_relative else None
-        есть_учёт = bool(учёт and учёт.is_file())
-        сколько = 0
-        if есть_учёт:
-            try:
-                сколько = len(parse_archive(учёт.read_text(encoding="utf-8")).video_ids)
-            except OSError:
-                есть_учёт = False
-
-        внутри = 0
-        if каталог:
-            try:
-                # Считать всё дерево незачем: хватает знания «пусто или нет».
-                внутри = sum(1 for _файл in itertools.islice(путь.iterdir(), 1))
-            except OSError:
-                внутри = 0
-
-        return judge_folder(
-            exists=существует,
-            is_dir=каталог,
-            writable=self._writable(путь) if каталог else False,
-            has_archive=есть_учёт,
-            archive_count=сколько,
-            files_inside=внутри,
-            same_as_now=каталог and путь.resolve() == self.base.resolve(),
+        """Осмотреть папку под архив: годится ли и чем грозит."""
+        return осмотреть_папку(
+            path, учёт=self.archive_relative, нынешняя=self.base
         )
-
-    @staticmethod
-    def _writable(путь: Path) -> bool:
-        """Проверяем записью, а не правами: на сетевых дисках и в OneDrive
-        права говорят одно, а запись кончается отказом."""
-        проба = путь / ".ytarchive-проба"
-        try:
-            проба.write_text("", encoding="utf-8")
-        except OSError:
-            return False
-        try:
-            проба.unlink()
-        except OSError:
-            pass
-        return True
 
     def config_text(self) -> str:
         try:

@@ -18,7 +18,7 @@ import pathlib
 
 #: Где живут надписи. Ядро и цикл выкачки сюда не входят: их сообщения идут
 #: в журнал, и перевод журнала — отдельная работа, ещё не сделанная.
-ФАЙЛЫ = ("gui/window.py", "gui/videos.py", "gui/source.py")
+ФАЙЛЫ = ("gui/window.py", "gui/videos.py", "gui/source.py", "gui/firstrun.py")
 
 
 def по_значению() -> set[str]:

@@ -182,4 +182,16 @@
         'not running',
     'остановлена, нужен человек':
         'stopped, needs you',
+    'Архив YouTube — первый запуск':
+        'YouTube Archive — first run',
+    'Программа будет забирать новые ролики с выбранных каналов сама.':
+        'The program will fetch new videos from the channels you choose, on its own.',
+    'Ролики скачиваются целиком, и места им нужно много: час видео — от 0,6 до 1,6 ГБ, а канал целиком легко занимает сотни гигабайт. Выберите папку на диске, где есть запас.':
+        'Videos are downloaded in full, and they need a lot of room: an hour of video is 0.6 to 1.6 GB, and a whole channel easily takes hundreds of gigabytes. Pick a folder on a drive with room to spare.',
+    'Папка не выбрана':
+        'No folder chosen',
+    'Готово':
+        'Done',
+    'Отмена':
+        'Cancel',
 }
