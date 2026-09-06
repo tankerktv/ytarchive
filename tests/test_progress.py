@@ -11,7 +11,7 @@ from core.progress import EventKind, parse_duration, parse_line, parse_size
 
 
 def test_начало_файла():
-    строка = r"[download] Destination: D:\Video\Архивы с YouTube\SoyuzUS\ролик.f399.mp4"
+    строка = r"[download] Destination: D:\Video\YouTube Archive\SoyuzUS\ролик.f399.mp4"
     событие = parse_line(строка)
     assert событие.kind is EventKind.DESTINATION
     assert событие.path.endswith("ролик.f399.mp4")
@@ -38,7 +38,7 @@ def test_переход_к_следующему_ролику():
 
 
 def test_слияние_потоков():
-    строка = r'[Merger] Merging formats into "D:\Video\Архивы\ролик.mkv"'
+    строка = r'[Merger] Merging formats into "D:\Video\Archive\ролик.mkv"'
     событие = parse_line(строка)
     assert событие.kind is EventKind.MERGING
     assert событие.path.endswith("ролик.mkv")
