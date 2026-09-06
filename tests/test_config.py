@@ -126,10 +126,10 @@ def test_путь_с_обратными_слэшами_переживает_за
     """
     from core.config import dump_config
 
-    исходный = parse_config(настройки(paths={"base": r"C:\Users\Example\Архив"}))
+    исходный = parse_config(настройки(paths={"base": r"C:\Users\Пример\Архив"}))
     повторный = parse_config(loads(dump_config(исходный)))
 
-    assert повторный.paths.base == r"C:\Users\Example\Архив"
+    assert повторный.paths.base == r"C:\Users\Пример\Архив"
 
 
 def test_в_записанном_файле_остаются_объяснения():
