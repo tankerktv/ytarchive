@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from runner.language import _
 from core.locking import LockInfo, LockState, describe, judge_lock
 
 #: Через сколько молчания замок считается протухшим. С запасом относительно
@@ -118,7 +119,7 @@ def acquire(path: Path, *, stale_after: float = STALE_AFTER) -> tuple[Lock | Non
         pid_alive=pid_alive(info.pid) if info else False,
         stale_after=stale_after,
     )
-    reason = describe(state, info)
+    reason = describe(state, info, _)
     if not state.can_take:
         return None, reason
 

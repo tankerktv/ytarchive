@@ -31,6 +31,7 @@ from core.ytdlp_args import (
     build_probe_args,
 )
 from runner.process import run_watched
+from runner.language import _
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,7 @@ def probe_channel(
             # что именно ответил yt-dlp, и разбираться приходится заново,
             # воспроизводя сбой руками. Проверено на себе 30.08.
             хвост = f" ({result.detail[:120]})" if result.detail else ""
-            on_event(f"{channel.name}: проверка — {result.diagnosis.value}{хвост}")
+            on_event(_('{}: проверка — {}{}').format(channel.name, result.diagnosis.value, хвост))
 
         if решение.action is not Action.RETRY:
             return решение, диагноз
@@ -149,7 +150,7 @@ def download_channel(
     перепись = enumerate_channel(channel, config, should_stop=should_stop)
     if перепись.unreadable and on_message is not None:
         on_message(
-            f"{channel.name}: непонятых строк в переписи {len(перепись.unreadable)}"
+            _('{}: непонятых строк в переписи {}').format(channel.name, len(перепись.unreadable))
         )
 
     очередь = [v.video_id for v in перепись.videos if v.video_id not in было]
@@ -158,7 +159,7 @@ def download_channel(
     снято = всего_до - len(очередь)
 
     if снято and on_message is not None:
-        on_message(f"{channel.name}: пропущено по вашему выбору {снято}")
+        on_message(_('{}: пропущено по вашему выбору {}').format(channel.name, снято))
 
     if not очередь:
         return 0, 0
@@ -170,7 +171,7 @@ def download_channel(
         batch.write_text("\n".join(очередь) + "\n", encoding="utf-8", newline="\n")
     except OSError as ошибка:
         if on_message is not None:
-            on_message(f"{channel.name}: не удалось записать список — {ошибка}")
+            on_message(_('{}: не удалось записать список — {}').format(channel.name, ошибка))
         return 0, 0
 
     упало = 0
@@ -210,6 +211,7 @@ def run_session(
     on_event: Callable[[Event], None] | None = None,
     on_message: Callable[[str], None] | None = None,
     on_channel: Callable[[str, int, int], None] | None = None,
+    on_stopped: Callable[[str, str], None] | None = None,
     sleep: Callable[[float], None] = time.sleep,
     should_stop: Callable[[], bool] | None = None,
 ) -> SessionSummary:
@@ -235,13 +237,13 @@ def run_session(
     # качаться, и заметят это через недели.
     for problem in parsed.problems:
         if on_message is not None:
-            on_message(f"строка {problem.line_number} пропущена: {problem.reason}")
+            on_message(_('строка {} пропущена: {}').format(problem.line_number, problem.reason))
 
     results: list[ChannelResult] = []
     for номер, channel in enumerate(parsed.channels, start=1):
         if should_stop is not None and should_stop():
             if on_message is not None:
-                on_message("остановлено по просьбе — остальные каналы ждут следующего прохода")
+                on_message(_("остановлено по просьбе — остальные каналы ждут следующего прохода"))
             break
         if on_channel is not None:
             on_channel(channel.name, номер, len(parsed.channels))
@@ -249,8 +251,18 @@ def run_session(
         if решение is None or решение.action is Action.STOP:
             причина = решение.reason if решение else "проверка не дала ответа"
             results.append(ChannelResult(channel=channel.name, stopped_reason=причина))
+            # Отдельно от журнала: окно узнаёт причину из живого состояния,
+            # а не разбором текста — текст переводится, разбор перевода это
+            # гадание.
+            if on_stopped is not None:
+                on_stopped(channel.name, причина)
             if on_message is not None:
-                on_message(f"{channel.name}: остановлено — {причина}")
+                on_message(_('{}: остановлено — {}').format(channel.name, _(причина)))
+                # Счёт попыток — отдельной строкой, а не приклеенным к причине:
+                # склеенная, она становится непереводимой, а в шапке окна
+                # число попыток и не нужно — там нужно, что чинить.
+                if решение is not None and решение.attempts:
+                    on_message(_('{}: не прошло за {} попыток').format(channel.name, решение.attempts))
 
             # Общая беда — сеть, куки, устаревший yt-dlp — одинакова для всех
             # каналов. Перебирать остальные значит потратить минуты и получить
@@ -260,8 +272,7 @@ def run_session(
                               and not any(r.channel == c.name for r in results)]
                 if оставшиеся and on_message is not None:
                     on_message(
-                        f"беда общая для всех каналов — остальные "
-                        f"({len(оставшиеся)}) не проверяю, ждём следующего прохода"
+                        _('беда общая для всех каналов — остальные ({}) не проверяю, ждём следующего прохода').format(len(оставшиеся))
                     )
                 break
             continue
@@ -272,6 +283,6 @@ def run_session(
         )
         results.append(ChannelResult(channel=channel.name, downloaded=скачано, failed=упало))
         if on_message is not None:
-            on_message(f"{channel.name}: скачано {скачано}, упало {упало}")
+            on_message(_('{}: скачано {}, упало {}').format(channel.name, скачано, упало))
 
     return SessionSummary(results=tuple(results))

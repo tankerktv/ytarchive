@@ -267,4 +267,170 @@
         'Terminé',
     'Отмена':
         'Annuler',
+    '    готово {:.1f} МБ{}':
+        '    terminé {:.1f} Mo{}',
+    '    отказ: {}':
+        '    échec : {}',
+    '  {:.2f}–{:.2f} ГБ':
+        '  {:.2f}–{:.2f} Go',
+    '  {}: ОТКАЗ — {}':
+        '  {} : REFUSÉ — {}',
+    '  {}: доступ есть':
+        '  {} : joignable',
+    '  качаю {}':
+        '  téléchargement de {}',
+    '  непонятных строк в архиве: {}':
+        '  lignes illisibles dans l’archive : {}',
+    '  строка {} пропущена: {}':
+        '  ligne {} ignorée : {}',
+    ', {:.2f} МБ/с':
+        ', {:.2f} Mo/s',
+    ', предпочтение AV1':
+        ', AV1 préféré',
+    'yt-dlp вернул пустой список при успешном коде — похоже, он устарел':
+        'yt-dlp a renvoyé une liste vide avec un code de succès — il semble périmé',
+    'yt-dlp сомневается в правах на вкладку канала':
+        'yt-dlp doute des droits sur l’onglet de la chaîne',
+    '{} уже есть. Перезаписать: --force':
+        '{} existe déjà. Écraser : --force',
+    '{}: не прошло за {} попыток':
+        '{} : échec après {} tentatives',
+    '{}: не разбирается как TOML — {}':
+        '{} : TOML invalide — {}',
+    '{}: не удалось записать список — {}':
+        '{} : file d’attente non écrite — {}',
+    '{}: непонятых строк в переписи {}':
+        '{} : lignes illisibles dans la liste : {}',
+    '{}: остановлено — {}':
+        '{} : arrêté — {}',
+    '{}: проверка — {}{}':
+        '{} : vérification — {}{}',
+    '{}: пропущено по вашему выбору {}':
+        '{} : ignorées selon votre choix : {}',
+    '{}: скачано {}, упало {}':
+        '{} : téléchargées {}, échouées {}',
+    'Ничего не скачано и не изменено. Качать: ytarchive run':
+        'Rien de téléchargé, rien de modifié. Pour télécharger : ytarchive run',
+    'Сколько займёт час материала при измеренных битрейтах:':
+        'Ce que prend une heure de vidéo aux débits mesurés :',
+    'архив:      {}':
+        'archive :    {}',
+    'беда общая для всех каналов — остальные ({}) не проверяю, ждём следующего прохода':
+        'le problème touche toutes les chaînes — les autres ({}) sont ignorées, on attend le passage suivant',
+    'в списке исключений непонятых строк {}: {}':
+        'lignes illisibles dans la liste d’exclusion : {} — {}',
+    'все каналы отвечают':
+        'toutes les chaînes répondent',
+    'доступ есть, форматы отдаются':
+        'joignable, les formats sont fournis',
+    'достучаться до каналов':
+        'joindre les chaînes',
+    'каналов с бедой: {}':
+        'chaînes en difficulté : {}',
+    'каналов:    {}':
+        'chaînes :    {}',
+    'качать непрерывно, без планировщика задач':
+        'télécharger en continu, sans le planificateur de tâches',
+    'качать — один проход и выход':
+        'télécharger — un passage puis sortir',
+    'качество:   до {}p':
+        'qualité :    jusqu’à {}p',
+    'куки:       {}':
+        'cookies :    {}',
+    'настройки не записались: {}':
+        'réglages non écrits : {}',
+    'настройки не созданы — запустите ещё раз, когда решите, куда качать':
+        'aucun réglage créé — relancez quand vous saurez où télécharger',
+    'настройки:  {}':
+        'réglages :   {}',
+    'настройки: {}':
+        'réglages : {}',
+    'не найден движок JavaScript — нужен node':
+        'aucun moteur JavaScript trouvé — node est nécessaire',
+    'не решается задача YouTube — нужен решатель EJS':
+        'l’épreuve YouTube n’est pas résolue — le solveur EJS est nécessaire',
+    'не удалось прочитать список каналов':
+        'la liste des chaînes n’a pas pu être lue',
+    'неопознанный отказ':
+        'échec non identifié',
+    'нет движка JavaScript':
+        'pas de moteur JavaScript',
+    'нет файла настроек {}. Создать образец: ytarchive init':
+        'pas de fichier de réglages {}. Créer un modèle : ytarchive init',
+    'нужен вход в аккаунт YouTube':
+        'une connexion au compte YouTube est requise',
+    'нужен вход в аккаунт YouTube — куки истекли или их нет':
+        'une connexion YouTube est requise — les cookies ont expiré ou manquent',
+    'окно наблюдения':
+        'la fenêtre de suivi',
+    'окно требует PySide6, а его нет: {}':
+        'la fenêtre demande PySide6, et il manque : {}',
+    'остановлено по просьбе':
+        'arrêté à la demande',
+    'остановлено по просьбе — остальные каналы ждут следующего прохода':
+        'arrêté à la demande — les autres chaînes attendent le passage suivant',
+    'перезаписать существующий':
+        'écraser l’existant',
+    'показать, но не создавать':
+        'montrer, sans rien créer',
+    'попросил остановиться — демон уйдёт, договорив текущий ролик':
+        'arrêt demandé — la vidéo en cours sera terminée',
+    'попросить работающий экземпляр остановиться':
+        'demander l’arrêt à la copie en cours',
+    'поставить:  {}':
+        'installer :  {}',
+    'построить окно и выйти — для сборки':
+        'construire la fenêtre et sortir — pour l’intégration',
+    'проверка не дала ответа':
+        'la vérification n’a rien répondu',
+    'пустая выдача при успешном коде возврата':
+        'sortie vide avec un code de succès',
+    'сделать столько проходов и выйти (по умолчанию — пока не остановят)':
+        'faire ce nombre de passages puis sortir (par défaut : jusqu’à l’arrêt demandé)',
+    'сетевой сбой':
+        'panne réseau',
+    'следующий проход через {:.0f} мин':
+        'prochain passage dans {:.0f} min',
+    'снято галочками роликов: {}':
+        'vidéos décochées : {}',
+    'создал бы {}:\n':
+        'créerait {} :\n',
+    'создан {} — поправьте пути и запустите: ytarchive check':
+        '{} créé — corrigez les chemins et lancez : ytarchive check',
+    'создан {}: архив в {}':
+        '{} créé : archive dans {}',
+    'создать образец настроек':
+        'créer un fichier de réglages modèle',
+    'список исключений не прочитан ({}) — качаю всё':
+        'la liste d’exclusion n’a pas été lue ({}) — tout est téléchargé',
+    'строка {} пропущена: {}':
+        'ligne {} ignorée : {}',
+    'уже работает: {}':
+        'tourne déjà : {}',
+    'уже скачано: {} роликов':
+        'déjà téléchargées : {} vidéos',
+    'файл настроек (по умолчанию {})':
+        'fichier de réglages (par défaut {})',
+    'что будет скачано, без изменений':
+        'ce qui serait téléchargé, sans rien changer',
+    'не заданы — YouTube откажет':
+        'non définis — YouTube refusera',
+    '{} роликов · {:.1f} ч · {:.0f}–{:.0f} ГБ':
+        '{} vidéos · {:.1f} h · {:.0f}–{:.0f} Go',
+    'замок брошен процессом {} — забираю':
+        'verrou abandonné par le processus {} — je le prends',
+    'замок протух: {} молчит слишком долго — забираю':
+        'verrou périmé : {} se tait depuis trop longtemps — je le prends',
+    'замок свободен':
+        'le verrou est libre',
+    'меряю…':
+        'mesure…',
+    'остановлено: {}':
+        'arrêté : {}',
+    'скачано {}':
+        'téléchargées {}',
+    'уже работает экземпляр {} — второй не нужен':
+        'la copie {} tourne déjà — une seconde est inutile',
+    'упало {} (заберутся следующим проходом)':
+        '{} en échec (reprises au passage suivant)',
 }

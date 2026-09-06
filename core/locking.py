@@ -65,12 +65,16 @@ def judge_lock(
     return LockState.HELD
 
 
-def describe(state: LockState, info: LockInfo | None) -> str:
-    """Строка для журнала — такая, чтобы по ней было понятно, что делать."""
+def describe(state: LockState, info: LockInfo | None, перевод=str) -> str:
+    """Строка для журнала — такая, чтобы по ней было понятно, что делать.
+
+    Переводчик доводом: ядру нельзя знать про язык интерфейса.
+    """
+    кто = info.pid if info else "?"
     if state is LockState.FREE:
-        return "замок свободен"
+        return перевод("замок свободен")
     if state is LockState.HELD:
-        return f"уже работает экземпляр {info.pid if info else '?'} — второй не нужен"
+        return перевод("уже работает экземпляр {} — второй не нужен").format(кто)
     if state is LockState.ORPHANED:
-        return f"замок брошен процессом {info.pid if info else '?'} — забираю"
-    return f"замок протух: {info.pid if info else '?'} молчит слишком долго — забираю"
+        return перевод("замок брошен процессом {} — забираю").format(кто)
+    return перевод("замок протух: {} молчит слишком долго — забираю").format(кто)

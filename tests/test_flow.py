@@ -35,7 +35,7 @@ def test_паузы_между_повторами_растут():
 def test_сетевое_не_пережидаем_бесконечно():
     решение = decide_after_probe(Diagnosis.NETWORK, 3, ПОЛИТИКА)
     assert решение.action is Action.STOP
-    assert "3 попыток" in решение.reason
+    assert решение.attempts == 3
 
 
 @pytest.mark.parametrize(

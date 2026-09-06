@@ -16,9 +16,23 @@ import pathlib
 
 КОРЕНЬ = pathlib.Path(__file__).resolve().parent.parent
 
-#: Где живут надписи. Ядро и цикл выкачки сюда не входят: их сообщения идут
-#: в журнал, и перевод журнала — отдельная работа, ещё не сделанная.
-ФАЙЛЫ = ("gui/window.py", "gui/videos.py", "gui/source.py", "gui/firstrun.py")
+#: Где живут надписи — окно, командная строка и журнал.
+ФАЙЛЫ = (
+    "gui/window.py",
+    "gui/videos.py",
+    "gui/source.py",
+    "gui/firstrun.py",
+    "app/main.py",
+    "runner/session.py",
+    "runner/daemon.py",
+)
+
+#: Ядро своих строк не переводит — оно принимает переводчик доводом и зовёт
+#: его под именем `перевод`. Собирать надо и такие вызовы: иначе полнота
+#: словарей проверялась бы мимо половины сообщений журнала.
+ФАЙЛЫ_ЯДРА = ("core/flow.py", "core/locking.py", "core/search.py", "core/status.py")
+
+ИМЕНА = ("_", "перевод")
 
 
 def по_значению() -> set[str]:
@@ -32,9 +46,23 @@ def по_значению() -> set[str]:
     import sys
 
     sys.path.insert(0, str(КОРЕНЬ))
+    from core.flow import HOPELESS
+    from core.probe import Diagnosis
     from core.status import RunState
 
-    return {состояние.value for состояние in RunState}
+    #: Причины остановки хранятся по-русски и переводятся тем, кто показывает.
+    #: Иначе выкачка, запущенная вчера по-русски, отдала бы окну русский текст,
+    #: когда окно уже говорит по-немецки.
+    свои = {
+        "не удалось прочитать список каналов",
+        "проверка не дала ответа",
+    }
+    return (
+        {состояние.value for состояние in RunState}
+        | {диагноз.value for диагноз in Diagnosis}
+        | set(HOPELESS.values())
+        | свои
+    )
 
 
 def из_файла(путь: pathlib.Path) -> set[str]:
@@ -44,7 +72,7 @@ def из_файла(путь: pathlib.Path) -> set[str]:
     for узел in ast.walk(дерево):
         if not (isinstance(узел, ast.Call) and isinstance(узел.func, ast.Name)):
             continue
-        if узел.func.id != "_" or not узел.args:
+        if узел.func.id not in ИМЕНА or not узел.args:
             continue
         первый = узел.args[0]
         if isinstance(первый, ast.Constant) and isinstance(первый.value, str):
@@ -55,7 +83,7 @@ def из_файла(путь: pathlib.Path) -> set[str]:
 def собрать(корень: pathlib.Path | None = None) -> set[str]:
     основа = корень or КОРЕНЬ
     итог: set[str] = set(по_значению())
-    for имя in ФАЙЛЫ:
+    for имя in ФАЙЛЫ + ФАЙЛЫ_ЯДРА:
         путь = основа / имя
         if путь.exists():
             итог |= из_файла(путь)

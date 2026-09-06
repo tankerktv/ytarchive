@@ -32,6 +32,7 @@ from pathlib import Path
 from core.flow import SessionSummary
 from core.schedule import Rhythm, next_pause
 from runner.lockfile import acquire
+from runner.language import _
 
 #: Насколько дробим паузу. Пауза бывает часовой, а на просьбу остановиться
 #: надо отвечать сразу — поэтому спим короткими кусками и между ними
@@ -55,6 +56,7 @@ def ask_stop(tools_dir: Path) -> None:
     Флагом, а не сигналом: сигналы на Windows работают иначе, чем везде,
     а окно и командная строка должны уметь это одинаково.
     """
+    # Содержимое файла, а не надпись: его никто не читает глазами.
     stop_path(tools_dir).write_text("стоп\n", encoding="utf-8", newline="\n")
 
 
@@ -125,7 +127,7 @@ def run_forever(
     нужно проверкам, чтобы цикл заканчивался; в работе не задаётся.
     """
     ритм = rhythm or Rhythm()
-    скажи = on_message or (lambda _: None)
+    скажи = on_message or (lambda сообщение: None)
     tools_dir = Path(tools_dir)
 
     # Флаг мог остаться с прошлой остановки: не сняв его, демон встанет
@@ -134,7 +136,7 @@ def run_forever(
 
     замок, объяснение = acquire(tools_dir / ИМЯ_ЗАМКА)
     if замок is None:
-        скажи(f"уже работает: {объяснение}")
+        скажи(_('уже работает: {}').format(объяснение))
         return 0
 
     пауза = _Пауза(sleep=sleep, clock=clock)
@@ -171,7 +173,7 @@ def run_forever(
                 # каждую строку в глазах человека.
 
                 if пора():
-                    скажи("остановлено по просьбе")
+                    скажи(_("остановлено по просьбе"))
                     break
                 if passes is not None and сделано >= passes:
                     break
@@ -181,9 +183,9 @@ def run_forever(
                     needs_human=итог.needs_human,
                     rhythm=ритм,
                 )
-                скажи(f"следующий проход через {ждать / 60:.0f} мин")
+                скажи(_('следующий проход через {:.0f} мин').format(ждать / 60))
                 if not пауза.выждать(ждать, пора_уходить=пора, отметиться=замок.heartbeat):
-                    скажи("остановлено по просьбе")
+                    скажи(_("остановлено по просьбе"))
                     break
     finally:
         clear_stop(tools_dir)

@@ -38,6 +38,14 @@ class LiveState:
     speed_bps: float = 0.0
     eta: str = ""
     updated_at: float = 0.0
+    #: Отказов за проход. Раньше окно считало их, разбирая журнал, — а журнал
+    #: теперь переводится, и считать в нём стало нечего.
+    errors: int = 0
+    #: Пауза между роликами. Не то же самое, что простой: выкачка жива.
+    sleeping: bool = False
+    #: Почему остановились, если остановились. Пустая строка — работаем.
+    #: Хранится по-русски: это ключ перевода, а не готовая надпись.
+    stopped_reason: str = ""
 
     @property
     def has_file(self) -> bool:
@@ -65,8 +73,13 @@ def apply_event(state: LiveState, event: Event, *, now: float) -> LiveState:
             percent=0.0,
             speed_bps=0.0,
             eta="",
+            sleeping=False,
             updated_at=now,
         )
+    if event.kind is EventKind.ERROR:
+        return replace(state, errors=state.errors + 1, updated_at=now)
+    if event.kind is EventKind.SLEEPING:
+        return replace(state, sleeping=True, updated_at=now)
     if event.kind is EventKind.PROGRESS:
         return replace(
             state,
@@ -93,6 +106,13 @@ def apply_event(state: LiveState, event: Event, *, now: float) -> LiveState:
             updated_at=now,
         )
     return state
+
+
+def stop_channel(state: LiveState, reason: str, *, now: float) -> LiveState:
+    """Остановились и нужен человек. Причина хранится по-русски: она ключ
+    перевода, а не готовая надпись — язык окна и язык выкачки могут
+    отличаться, если их запускали порознь."""
+    return replace(state, stopped_reason=reason, file_name="", updated_at=now)
 
 
 def start_channel(state: LiveState, name: str, index: int, total: int, *, now: float) -> LiveState:
@@ -144,13 +164,16 @@ def from_text(text: str) -> LiveState | None:
             continue
         значение = data[имя]
 
-        # `bool` в Python — подвид `int`, и без этой проверки `true`
-        # молча стал бы единицей.
-        if isinstance(значение, bool):
-            return None
-
         ожидается = str(поле.type)
-        if ожидается == "str":
+
+        # `bool` в Python — подвид `int`, и без разбора `true` молча стал бы
+        # единицей. Поэтому булево принимается только там, где объявлено.
+        if ожидается == "bool":
+            if not isinstance(значение, bool):
+                return None
+        elif isinstance(значение, bool):
+            return None
+        elif ожидается == "str":
             if not isinstance(значение, str):
                 return None
         elif ожидается == "int":

@@ -31,6 +31,8 @@ class Decision:
     action: Action
     delay: float = 0.0
     reason: str = ""
+    #: Сколько попыток сделано, если сдались после повторов. Ноль — не про то.
+    attempts: int = 0
 
     @property
     def needs_human(self) -> bool:
@@ -67,10 +69,10 @@ def decide_after_probe(
 
     # Остальное — сетевое и неопознанное — пережидаем, но не бесконечно.
     if attempt >= policy.max_attempts:
-        return Decision(
-            action=Action.STOP,
-            reason=f"{diagnosis.value}: не прошло за {policy.max_attempts} попыток",
-        )
+        # Причина — то, ЧТО не так, без счёта попыток. Счёт уходит в журнал
+        # отдельной строкой: склеенный с причиной, он делал её непереводимой,
+        # а в шапке окна число попыток и не нужно — там нужно, что чинить.
+        return Decision(action=Action.STOP, reason=diagnosis.value, attempts=attempt)
 
     return Decision(
         action=Action.RETRY,
@@ -111,17 +113,22 @@ class SessionSummary:
     def needs_human(self) -> bool:
         return bool(self.stopped)
 
-    def describe(self) -> str:
+    def describe(self, перевод=str) -> str:
         """Одна строка для журнала и для интерфейса.
 
         Упавшие ролики называются отдельно от остановленных каналов: первое —
         обычное дело, забирается следующим проходом, второе требует человека.
         Слить их в одно число значит спрятать беду за обыденностью.
         """
-        parts = [f"скачано {self.downloaded}"]
+        parts = [перевод("скачано {}").format(self.downloaded)]
         if self.failed:
-            parts.append(f"упало {self.failed} (заберутся следующим проходом)")
+            parts.append(
+                перевод("упало {} (заберутся следующим проходом)").format(self.failed)
+            )
         if self.stopped:
-            имена = ", ".join(f"{r.channel} — {r.stopped_reason}" for r in self.stopped)
-            parts.append(f"остановлено: {имена}")
+            # Причина остановки хранится по-русски как ключ — переводим и её.
+            имена = ", ".join(
+                f"{r.channel} — {перевод(r.stopped_reason)}" for r in self.stopped
+            )
+            parts.append(перевод("остановлено: {}").format(имена))
         return "; ".join(parts)

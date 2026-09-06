@@ -194,4 +194,170 @@
         'Done',
     'Отмена':
         'Cancel',
+    '    готово {:.1f} МБ{}':
+        '    done {:.1f} MB{}',
+    '    отказ: {}':
+        '    failure: {}',
+    '  {:.2f}–{:.2f} ГБ':
+        '  {:.2f}–{:.2f} GB',
+    '  {}: ОТКАЗ — {}':
+        '  {}: REFUSED — {}',
+    '  {}: доступ есть':
+        '  {}: reachable',
+    '  качаю {}':
+        '  downloading {}',
+    '  непонятных строк в архиве: {}':
+        '  unreadable lines in the archive: {}',
+    '  строка {} пропущена: {}':
+        '  line {} skipped: {}',
+    ', {:.2f} МБ/с':
+        ', {:.2f} MB/s',
+    ', предпочтение AV1':
+        ', AV1 preferred',
+    'yt-dlp вернул пустой список при успешном коде — похоже, он устарел':
+        'yt-dlp returned an empty list with a success code — it looks outdated',
+    'yt-dlp сомневается в правах на вкладку канала':
+        'yt-dlp doubts the rights to the channel tab',
+    '{} уже есть. Перезаписать: --force':
+        '{} already exists. Overwrite: --force',
+    '{}: не прошло за {} попыток':
+        '{}: failed after {} attempts',
+    '{}: не разбирается как TOML — {}':
+        '{}: not valid TOML — {}',
+    '{}: не удалось записать список — {}':
+        '{}: could not write the queue — {}',
+    '{}: непонятых строк в переписи {}':
+        '{}: unreadable lines in the listing: {}',
+    '{}: остановлено — {}':
+        '{}: stopped — {}',
+    '{}: проверка — {}{}':
+        '{}: probe — {}{}',
+    '{}: пропущено по вашему выбору {}':
+        '{}: skipped by your choice: {}',
+    '{}: скачано {}, упало {}':
+        '{}: downloaded {}, failed {}',
+    'Ничего не скачано и не изменено. Качать: ytarchive run':
+        'Nothing downloaded and nothing changed. To download: ytarchive run',
+    'Сколько займёт час материала при измеренных битрейтах:':
+        'How much an hour of material takes at the measured bitrates:',
+    'архив:      {}':
+        'archive:     {}',
+    'беда общая для всех каналов — остальные ({}) не проверяю, ждём следующего прохода':
+        'the trouble is common to all channels — skipping the rest ({}), waiting for the next pass',
+    'в списке исключений непонятых строк {}: {}':
+        'unreadable lines in the exclusion list: {} — {}',
+    'все каналы отвечают':
+        'all channels respond',
+    'доступ есть, форматы отдаются':
+        'reachable, formats are served',
+    'достучаться до каналов':
+        'reach the channels',
+    'каналов с бедой: {}':
+        'channels in trouble: {}',
+    'каналов:    {}':
+        'channels:    {}',
+    'качать непрерывно, без планировщика задач':
+        'download continuously, without the task scheduler',
+    'качать — один проход и выход':
+        'download — one pass and exit',
+    'качество:   до {}p':
+        'quality:     up to {}p',
+    'куки:       {}':
+        'cookies:     {}',
+    'настройки не записались: {}':
+        'settings were not written: {}',
+    'настройки не созданы — запустите ещё раз, когда решите, куда качать':
+        'no settings created — run again once you decide where to download',
+    'настройки:  {}':
+        'settings:    {}',
+    'настройки: {}':
+        'settings: {}',
+    'не найден движок JavaScript — нужен node':
+        'no JavaScript engine found — node is required',
+    'не решается задача YouTube — нужен решатель EJS':
+        'the YouTube challenge is unsolved — the EJS solver is required',
+    'не удалось прочитать список каналов':
+        'could not read the channel list',
+    'неопознанный отказ':
+        'unrecognised failure',
+    'нет движка JavaScript':
+        'no JavaScript engine',
+    'нет файла настроек {}. Создать образец: ytarchive init':
+        'no settings file {}. Create a sample: ytarchive init',
+    'нужен вход в аккаунт YouTube':
+        'a YouTube sign-in is required',
+    'нужен вход в аккаунт YouTube — куки истекли или их нет':
+        'a YouTube sign-in is required — the cookies expired or are missing',
+    'окно наблюдения':
+        'the watching window',
+    'окно требует PySide6, а его нет: {}':
+        'the window needs PySide6, and it is missing: {}',
+    'остановлено по просьбе':
+        'stopped as asked',
+    'остановлено по просьбе — остальные каналы ждут следующего прохода':
+        'stopped as asked — the remaining channels wait for the next pass',
+    'перезаписать существующий':
+        'overwrite the existing one',
+    'показать, но не создавать':
+        'show, but do not create',
+    'попросил остановиться — демон уйдёт, договорив текущий ролик':
+        'asked it to stop — it will finish the current video and go',
+    'попросить работающий экземпляр остановиться':
+        'ask the running copy to stop',
+    'поставить:  {}':
+        'install:  {}',
+    'построить окно и выйти — для сборки':
+        'build the window and exit — for the pipeline',
+    'проверка не дала ответа':
+        'the probe gave no answer',
+    'пустая выдача при успешном коде возврата':
+        'empty output with a success exit code',
+    'сделать столько проходов и выйти (по умолчанию — пока не остановят)':
+        'make this many passes and exit (by default — until asked to stop)',
+    'сетевой сбой':
+        'network failure',
+    'следующий проход через {:.0f} мин':
+        'next pass in {:.0f} min',
+    'снято галочками роликов: {}':
+        'videos unchecked: {}',
+    'создал бы {}:\n':
+        'would create {}:\n',
+    'создан {} — поправьте пути и запустите: ytarchive check':
+        'created {} — fix the paths and run: ytarchive check',
+    'создан {}: архив в {}':
+        'created {}: archive in {}',
+    'создать образец настроек':
+        'create a sample settings file',
+    'список исключений не прочитан ({}) — качаю всё':
+        'the exclusion list was not read ({}) — downloading everything',
+    'строка {} пропущена: {}':
+        'line {} skipped: {}',
+    'уже работает: {}':
+        'already running: {}',
+    'уже скачано: {} роликов':
+        'already downloaded: {} videos',
+    'файл настроек (по умолчанию {})':
+        'settings file (default {})',
+    'что будет скачано, без изменений':
+        'what will be downloaded, changing nothing',
+    'не заданы — YouTube откажет':
+        'not set — YouTube will refuse',
+    '{} роликов · {:.1f} ч · {:.0f}–{:.0f} ГБ':
+        '{} videos · {:.1f} h · {:.0f}–{:.0f} GB',
+    'замок брошен процессом {} — забираю':
+        'lock abandoned by process {} — taking it',
+    'замок протух: {} молчит слишком долго — забираю':
+        'stale lock: {} has been silent too long — taking it',
+    'замок свободен':
+        'lock is free',
+    'меряю…':
+        'measuring…',
+    'остановлено: {}':
+        'stopped: {}',
+    'скачано {}':
+        'downloaded {}',
+    'уже работает экземпляр {} — второй не нужен':
+        'copy {} is already running — a second one is not needed',
+    'упало {} (заберутся следующим проходом)':
+        '{} failed (they will be fetched on the next pass)',
 }

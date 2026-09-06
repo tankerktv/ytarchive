@@ -473,7 +473,7 @@ class Window(QMainWindow):
         self.находки.setItem(номер, 0, значок)
         self.находки.setRowHeight(номер, 38)
 
-        for сдвиг, значение in enumerate((кандидат.name, кандидат.describe(), подпись)):
+        for сдвиг, значение in enumerate((кандидат.name, кандидат.describe(_), подпись)):
             ячейка = QTableWidgetItem(значение)
             if сдвиг == 2 and влезет is False:
                 ячейка.setForeground(QColor("#c62828"))
@@ -494,7 +494,7 @@ class Window(QMainWindow):
             ответ = QMessageBox.question(
                 self,
                 _("Может не влезть"),
-                _('По верхней оценке «{}» займёт больше, чем есть свободного места.\n\n{}\n\nВсё равно добавить?').format(кандидат.name, кандидат.describe()),
+                _('По верхней оценке «{}» займёт больше, чем есть свободного места.\n\n{}\n\nВсё равно добавить?').format(кандидат.name, кандидат.describe(_)),
             )
             if ответ != QMessageBox.StandardButton.Yes:
                 return
@@ -849,10 +849,11 @@ class Window(QMainWindow):
     def обновить(self) -> None:
         строки = self.source.log_tail(TAIL_LINES)
         архив = parse_archive(self.source.archive_text())
+        живое = self.source.live_state()
         снимок = build_status(
-            строки,
             process_running=self.source.download_running(),
             archive_count=len(архив),
+            live=живое,
         )
 
         self.заголовок.setText(снимок.headline(_))

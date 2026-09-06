@@ -49,15 +49,14 @@ class Candidate:
     def size_range(self) -> tuple[int, int] | None:
         return estimate_range(self.seconds) if self.measured else None
 
-    def describe(self) -> str:
+    def describe(self, перевод=str) -> str:
         """Строка для человека. Пока не измерено — так и говорим,
         а не показываем ноль: ноль выглядит как «пустой канал»."""
         if not self.measured:
-            return "меряю…"
+            return перевод("меряю…")
         низ, верх = self.size_range()
-        return (
-            f"{self.videos} роликов · {self.seconds / 3600:.1f} ч · "
-            f"{низ / 1000**3:.0f}–{верх / 1000**3:.0f} ГБ"
+        return перевод("{} роликов · {:.1f} ч · {:.0f}–{:.0f} ГБ").format(
+            self.videos, self.seconds / 3600, низ / 1000**3, верх / 1000**3
         )
 
 
