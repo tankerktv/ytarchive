@@ -27,25 +27,34 @@ all the memory. Most of the decisions below come from that.
 * **Estimates disk space up front.** `plan` shows what a channel will take
   before anything is downloaded.
 
-## Requirements
+## Installing
 
-Python 3.10 or newer, `node` (without it YouTube serves storyboards instead of
-the video), `yt-dlp` and `ffmpeg`.
+You need Python 3.10 or newer. Download the program, then run the installer
+from its folder:
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install ".[dev,gui]"
-.venv/bin/python ytarchive.py gui
+install.cmd        # Windows — or just double-click it
+./install.sh       # Linux, macOS
 ```
 
-On the first run the program asks for the interface language and the folder to
-keep the archive in, then writes the settings itself.
+It shows what it is going to do and asks before doing it: a Python
+environment inside the program folder, `yt-dlp` and the window in it, a
+shortcut, and autostart at login. It needs no administrator rights.
+`python install.py --dry-run` shows the steps without changing anything.
 
-`ytarchive check` tells you what is missing and how to install it on your
-system.
+Two things it cannot install through Python are `node` (without it YouTube
+serves storyboards instead of the video) and `ffmpeg`; it tells you how to
+get them.
 
-The GUI extra is optional: the command line and the background downloader do
-not need Qt.
+On the first run the program asks for the interface language and the folder
+to keep the archive in, then writes the settings itself.
+
+**[INSTALL.md](INSTALL.md) walks through all of it step by step** —
+including the YouTube cookies the program needs and what to do when
+something goes wrong. По-русски: [INSTALL.ru.md](INSTALL.ru.md).
+
+The window is optional: `--no-gui` installs only the command line and the
+background downloader, without Qt.
 
 ## Usage
 
@@ -112,7 +121,7 @@ Verified on Windows and on Debian (tests, window, command line). macOS is
 untested — the code is portable and there is every reason to expect it to work,
 but expectation is not verification.
 
-Autostart at login is not set up by the program itself.
+The installer has been run on Windows and Debian; its macOS steps are untested.
 
 ## Development
 

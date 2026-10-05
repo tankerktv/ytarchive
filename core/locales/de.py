@@ -459,4 +459,81 @@
         'Ordner konnte nicht umbenannt werden: {}',
     'такого канала в списке нет':
         'diesen Kanal gibt es in der Liste nicht',
+    # --- установщик ---
+    '    на Debian и Ubuntu сначала нужно: sudo apt-get install python3-venv':
+        '    unter Debian und Ubuntu zuerst: sudo apt-get install python3-venv',
+    'Python {} — подходит.':
+        'Python {} — passt.',
+    '[Д/н]':
+        '[J/n]',
+    '[д/Н]':
+        '[j/N]',
+    '{} — не найден, и я не знаю, чем его поставить на этой системе':
+        '{} — nicht gefunden, und ich weiß nicht, womit man es auf diesem System installiert',
+    '{} — поставьте сами: {}':
+        '{} — bitte selbst installieren: {}',
+    'Архив YouTube — выкачка':
+        'YouTube-Archiv — Download',
+    'Вхолостую: ничего не тронуто.':
+        'Probelauf: nichts wurde verändert.',
+    'Выкачка новых роликов в фоне':
+        'Lädt neue Videos im Hintergrund',
+    'Выполнить?':
+        'Ausführen?',
+    'Готово.':
+        'Fertig.',
+    'Запускать выкачку при входе в систему?':
+        'Download bei der Anmeldung starten?',
+    'Исправьте причину и запустите установку ещё раз — сделанное не пропадёт.':
+        'Beheben Sie die Ursache und starten Sie die Installation erneut — das Erledigte bleibt erhalten.',
+    'Окно архива роликов':
+        'Fenster des Videoarchivs',
+    'Осталось сделать руками:':
+        'Von Hand zu erledigen:',
+    'Остановился на шаге {}: дальше без него нельзя.':
+        'Bei Schritt {} angehalten: ohne ihn geht es nicht weiter.',
+    'Открыть окно сейчас?':
+        'Fenster jetzt öffnen?',
+    'Открыть окно:  {} {} gui':
+        'Fenster öffnen:  {} {} gui',
+    'Отменено, ничего не тронуто.':
+        'Abgebrochen, nichts wurde verändert.',
+    'Положить ярлык, открывающий окно?':
+        'Verknüpfung anlegen, die das Fenster öffnet?',
+    'После установки node и ffmpeg откройте новый терминал: старый их не увидит.':
+        'Öffnen Sie nach der Installation von node und ffmpeg ein neues Terminal: das alte sieht sie nicht.',
+    'Создать настройки: {} {} init':
+        'Einstellungen anlegen: {} {} init',
+    'Спросить некого: запустите в терминале или добавьте --yes.':
+        'Niemand zum Fragen: im Terminal starten oder --yes angeben.',
+    'Установка ytarchive в {}':
+        'ytarchive wird installiert in {}',
+    'Установка ytarchive.':
+        'ytarchive installieren.',
+    'Что будет сделано:':
+        'Was getan wird:',
+    'Что дальше — куки YouTube и первый канал — написано в INSTALL.ru.md.':
+        'Wie es weitergeht — YouTube-Cookies und der erste Kanal — steht in INSTALL.md.',
+    'без окна: только командная строка и выкачка':
+        'ohne Fenster: nur Kommandozeile und Download',
+    'запускать выкачку при входе в систему':
+        'Download bei der Anmeldung starten',
+    'не запускать выкачку при входе в систему':
+        'Download bei der Anmeldung nicht starten',
+    'не класть ярлык окна':
+        'keine Verknüpfung für das Fenster anlegen',
+    'не получилось: {}':
+        'fehlgeschlagen: {}',
+    'не спрашивать':
+        'nicht nachfragen',
+    'положить ярлык окна':
+        'Verknüpfung für das Fenster anlegen',
+    'поставить {}: {}':
+        '{} installieren: {}',
+    'поставить в окружение программы: {}':
+        'in die Programmumgebung installieren: {}',
+    'создать окружение Python в папке программы (.venv)':
+        'Python-Umgebung im Programmordner anlegen (.venv)',
+    'только показать шаги, ничего не трогая':
+        'nur die Schritte zeigen, nichts verändern',
 }

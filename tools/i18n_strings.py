@@ -25,6 +25,7 @@ import pathlib
     "app/main.py",
     "runner/session.py",
     "runner/daemon.py",
+    "install.py",
 )
 
 #: Ядро своих строк не переводит — оно принимает переводчик доводом и зовёт

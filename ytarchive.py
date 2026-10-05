@@ -12,12 +12,20 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.main import CONFIG_NAME, main  # noqa: E402
+from core.install import extend_path  # noqa: E402
+
+# Программы, поставленные в окружение (yt-dlp), лежат рядом с интерпретатором.
+# С ярлыка окружение никто не «включает», и без этого их было бы не найти.
+os.environ["PATH"] = extend_path(
+    os.environ.get("PATH", ""), str(Path(sys.executable).parent), os.pathsep
+)
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
