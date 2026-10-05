@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 
 SEPARATOR = "|"
 COMMENT_PREFIX = "#"
@@ -45,8 +46,9 @@ class ParseResult:
 
 HEADER = (
     "# Каналы для выкачки. Формат: <Папка>|<адрес вкладки videos>\n"
-    "# Строки с # игнорируются. Название задаёт папку в архиве —\n"
-    "# переименование заведёт новую папку, а старая останется как есть.\n"
+    "# Строки с # игнорируются. Название задаёт папку в архиве.\n"
+    "# Переименовывать лучше из окна: оно переименует и папку. Поправив имя\n"
+    "# здесь руками, получите новую папку, а прежняя останется как есть.\n"
 )
 
 
@@ -145,3 +147,82 @@ def parse_channels(text: str) -> ParseResult:
         channels.append(Channel(name=name, url=url))
 
     return ParseResult(channels=tuple(channels), problems=tuple(problems))
+
+
+# --- переименование ---------------------------------------------------------
+
+
+class RenameVerdict(Enum):
+    """Можно ли дать каналу такое имя. Причина отказа — значением, а не
+    текстом: текст показывает окно, и на своём языке."""
+
+    OK = "ok"
+    NO_SUCH = "no-such"
+    EMPTY = "empty"
+    FORBIDDEN = "forbidden"
+    SAME = "same"
+    DUPLICATE = "duplicate"
+
+
+def check_rename(
+    channels: tuple[Channel, ...] | list[Channel], index: int, new_name: str
+) -> RenameVerdict:
+    """Проверить новое имя канала. Имя — оно же имя папки, отсюда строгость."""
+    список = list(channels)
+    if not 0 <= index < len(список):
+        return RenameVerdict.NO_SUCH
+
+    имя = new_name.strip()
+    if not имя:
+        return RenameVerdict.EMPTY
+    if FORBIDDEN_IN_PATH.search(имя):
+        return RenameVerdict.FORBIDDEN
+    if имя == список[index].name:
+        return RenameVerdict.SAME
+
+    # Сравниваем без учёта регистра: на Windows «soyuz» и «Soyuz» — одна
+    # папка, и два канала в ней дали бы перемешанный архив, разобрать который
+    # потом нельзя. Самого себя не считаем: поменять регистр своего имени можно.
+    for номер, канал in enumerate(список):
+        if номер != index and канал.name.casefold() == имя.casefold():
+            return RenameVerdict.DUPLICATE
+    return RenameVerdict.OK
+
+
+def rename_channel(
+    channels: tuple[Channel, ...] | list[Channel], index: int, new_name: str
+) -> tuple[Channel, ...]:
+    """Список с переименованным каналом. Порядок и адрес не меняются."""
+    приговор = check_rename(channels, index, new_name)
+    if приговор is not RenameVerdict.OK:
+        raise ValueError(f"переименовать нельзя: {приговор.value}")
+    список = list(channels)
+    список[index] = Channel(name=new_name.strip(), url=список[index].url)
+    return tuple(список)
+
+
+class FolderMove(Enum):
+    """Что делать с папкой при переименовании канала."""
+
+    NOTHING = "nothing"
+    MOVE = "move"
+    CONFLICT = "conflict"
+
+
+def judge_folder_rename(*, old_exists: bool, new_exists: bool, same_folder: bool) -> FolderMove:
+    """Решить судьбу папки.
+
+    Переименование канала без папки и есть тот раскол, который уже случался:
+    новое пошло бы в новую папку, старое осталось бы в прежней. Поэтому папка
+    едет вместе с именем.
+
+    Если папка с новым именем уже есть и это ДРУГАЯ папка — отказ. Сливать
+    две папки молча нельзя: там могут лежать ролики другого канала.
+    `same_folder` — случай смены одного регистра: для Windows это та же папка,
+    и её можно просто переименовать.
+    """
+    if not old_exists:
+        return FolderMove.NOTHING
+    if new_exists and not same_folder:
+        return FolderMove.CONFLICT
+    return FolderMove.MOVE

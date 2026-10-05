@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -336,6 +337,8 @@ class Window(QMainWindow):
         self.кнопка_вверх = QPushButton(_("↑ Выше"))
         self.кнопка_вниз = QPushButton(_("↓ Ниже"))
         self.кнопка_убрать = QPushButton(_("Убрать"))
+        self.кнопка_имя = QPushButton(_("Переименовать…"))
+        self.кнопка_имя.setToolTip(_("Сменить название канала вместе с его папкой."))
         self.кнопка_ролики = QPushButton(_("Выбрать ролики…"))
         self.кнопка_ролики.setToolTip(
             _("Список роликов канала с галочками. По умолчанию отмечены все.")
@@ -344,6 +347,7 @@ class Window(QMainWindow):
             self.кнопка_вверх,
             self.кнопка_вниз,
             self.кнопка_убрать,
+            self.кнопка_имя,
             self.кнопка_ролики,
         ):
             к.setEnabled(False)
@@ -361,6 +365,7 @@ class Window(QMainWindow):
         self.кнопка_вниз.clicked.connect(lambda: self._переставить(+1))
         self.кнопка_убрать.clicked.connect(self._убрать_канал)
         self.кнопка_ролики.clicked.connect(self._выбрать_ролики)
+        self.кнопка_имя.clicked.connect(self._переименовать_канал)
         self.список_каналов.itemSelectionChanged.connect(self._выбор_канала)
         self._каналы: list = []
         self._перечитать_каналы()
@@ -375,6 +380,7 @@ class Window(QMainWindow):
         self.кнопка_вверх.setEnabled(есть and номер > 0)
         self.кнопка_вниз.setEnabled(есть and номер < len(self._каналы) - 1)
         self.кнопка_убрать.setEnabled(есть)
+        self.кнопка_имя.setEnabled(есть)
         self.кнопка_ролики.setEnabled(есть)
 
     def _выбрать_ролики(self) -> None:
@@ -404,6 +410,28 @@ class Window(QMainWindow):
         self.каналы_ответ.setText(self.source.write_channels(format_channels(стало)).text)
         self._перечитать_каналы()
         self.список_каналов.selectRow(номер + куда)
+
+    def _переименовать_канал(self) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        if not строки:
+            return
+        номер = строки[0].row()
+        прежнее = self._каналы[номер].name
+
+        новое, согласие = QInputDialog.getText(
+            self,
+            _("Переименовать канал"),
+            _("Новое название. Оно же станет именем папки — она переименуется вместе с каналом."),
+            text=прежнее,
+        )
+        if not согласие:
+            return
+
+        ответ = self.source.rename_channel(номер, новое)
+        self.каналы_ответ.setText(ответ.text)
+        if ответ.ok:
+            self._перечитать_каналы()
+            self._обновить_таблицу()
 
     def _убрать_канал(self) -> None:
         строки = self.список_каналов.selectionModel().selectedRows()

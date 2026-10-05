@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from core.archive import parse_archive
@@ -29,6 +29,7 @@ from core.ytdlp_args import (
     build_batch_args,
     build_enumerate_args,
     build_probe_args,
+    output_template_for,
 )
 from runner.process import run_watched
 from runner.language import _
@@ -185,7 +186,13 @@ def download_channel(
             on_event(event)
 
     try:
-        args = build_batch_args(config.settings, str(batch))
+        # Папка — по имени из нашего списка, а не по названию канала на YouTube:
+        # иначе переименование канала его владельцем раскалывает архив надвое.
+        settings = replace(
+            config.settings,
+            output_template=output_template_for(str(config.base_dir), channel.name),
+        )
+        args = build_batch_args(settings, str(batch))
         run_watched(
             [*config.ytdlp, *args],
             config.watchdog,

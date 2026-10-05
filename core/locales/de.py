@@ -433,4 +433,30 @@
         'Kopie {} läuft bereits — eine zweite ist nicht nötig',
     'упало {} (заберутся следующим проходом)':
         '{} fehlgeschlagen (werden beim nächsten Durchlauf geholt)',
+    'Новое название. Оно же станет именем папки — она переименуется вместе с каналом.':
+        'Neuer Name. Er wird auch der Ordnername — der Ordner wird zusammen mit dem Kanal umbenannt.',
+    'Переименовать канал':
+        'Kanal umbenennen',
+    'Переименовать…':
+        'Umbenennen…',
+    'Сменить название канала вместе с его папкой.':
+        'Den Kanalnamen samt Ordner ändern.',
+    'в названии есть символы, недопустимые в имени папки':
+        'der Name enthält Zeichen, die in Ordnernamen nicht erlaubt sind',
+    'идёт проход выкачки — дождитесь его конца или остановите выкачку':
+        'ein Durchlauf läuft gerade — warten Sie ab oder halten Sie das Herunterladen an',
+    'канал переименован: «{}» → «{}»':
+        'Kanal umbenannt: „{}“ → „{}“',
+    'канал с таким названием уже есть':
+        'ein Kanal mit diesem Namen existiert bereits',
+    'название не может быть пустым':
+        'der Name darf nicht leer sein',
+    'название то же самое':
+        'der Name ist derselbe',
+    'папка «{}» уже есть — сливать две папки молча нельзя':
+        'der Ordner „{}“ existiert bereits — zwei Ordner werden nie stillschweigend zusammengelegt',
+    'папку переименовать не вышло: {}':
+        'Ordner konnte nicht umbenannt werden: {}',
+    'такого канала в списке нет':
+        'diesen Kanal gibt es in der Liste nicht',
 }

@@ -46,7 +46,7 @@ from core.livestate import (
 )
 from core.progress import Event, EventKind
 from core.supervisor import WatchdogPolicy
-from core.ytdlp_args import DownloadSettings
+from core.ytdlp_args import FILE_TEMPLATE, DownloadSettings
 from runner.daemon import ask_stop, daemon_running, run_forever
 from runner.lockfile import acquire
 from runner.language import _
@@ -78,7 +78,9 @@ def build_session(config: Config, base: Path) -> SessionConfig:
     cookies = resolve(base, config.paths.cookies)
     settings = DownloadSettings(
         archive_path=str(archive),
-        output_template=str(base / "%(channel)s" / "%(upload_date>%Y-%m-%d)s - %(title).150B [%(id)s].%(ext)s"),
+        # Запасной шаблон: цикл выкачки подставляет свой на каждый канал, с
+        # папкой по имени из списка (см. core.ytdlp_args.output_template_for).
+        output_template=str(base / "%(channel)s" / FILE_TEMPLATE),
         cookies_file=str(cookies) if cookies.exists() else None,
         height=config.height,
         prefer_av1=config.prefer_av1,

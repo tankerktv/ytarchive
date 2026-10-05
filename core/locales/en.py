@@ -360,4 +360,30 @@
         'copy {} is already running — a second one is not needed',
     'упало {} (заберутся следующим проходом)':
         '{} failed (they will be fetched on the next pass)',
+    'Новое название. Оно же станет именем папки — она переименуется вместе с каналом.':
+        'New name. It also becomes the folder name — the folder is renamed together with the channel.',
+    'Переименовать канал':
+        'Rename channel',
+    'Переименовать…':
+        'Rename…',
+    'Сменить название канала вместе с его папкой.':
+        'Change the channel name together with its folder.',
+    'в названии есть символы, недопустимые в имени папки':
+        'the name contains characters that are not allowed in a folder name',
+    'идёт проход выкачки — дождитесь его конца или остановите выкачку':
+        'a download pass is running — wait for it to finish or stop downloading',
+    'канал переименован: «{}» → «{}»':
+        'channel renamed: “{}” → “{}”',
+    'канал с таким названием уже есть':
+        'a channel with this name already exists',
+    'название не может быть пустым':
+        'the name cannot be empty',
+    'название то же самое':
+        'the name is the same',
+    'папка «{}» уже есть — сливать две папки молча нельзя':
+        'the folder “{}” already exists — two folders are never merged silently',
+    'папку переименовать не вышло: {}':
+        'could not rename the folder: {}',
+    'такого канала в списке нет':
+        'there is no such channel in the list',
 }

@@ -433,4 +433,30 @@
         'la copia {} ya está en marcha: no hace falta otra',
     'упало {} (заберутся следующим проходом)':
         '{} fallidos (se recogerán en la siguiente pasada)',
+    'Новое название. Оно же станет именем папки — она переименуется вместе с каналом.':
+        'Nombre nuevo. Será también el nombre de la carpeta: se renombra junto con el canal.',
+    'Переименовать канал':
+        'Renombrar canal',
+    'Переименовать…':
+        'Renombrar…',
+    'Сменить название канала вместе с его папкой.':
+        'Cambiar el nombre del canal junto con su carpeta.',
+    'в названии есть символы, недопустимые в имени папки':
+        'el nombre contiene caracteres no permitidos en nombres de carpeta',
+    'идёт проход выкачки — дождитесь его конца или остановите выкачку':
+        'hay una pasada en curso: espere a que termine o detenga la descarga',
+    'канал переименован: «{}» → «{}»':
+        'canal renombrado: «{}» → «{}»',
+    'канал с таким названием уже есть':
+        'ya existe un canal con ese nombre',
+    'название не может быть пустым':
+        'el nombre no puede estar vacío',
+    'название то же самое':
+        'el nombre es el mismo',
+    'папка «{}» уже есть — сливать две папки молча нельзя':
+        'la carpeta «{}» ya existe: dos carpetas nunca se fusionan en silencio',
+    'папку переименовать не вышло: {}':
+        'no se pudo renombrar la carpeta: {}',
+    'такого канала в списке нет':
+        'ese canal no está en la lista',
 }

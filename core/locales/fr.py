@@ -433,4 +433,30 @@
         'la copie {} tourne déjà — une seconde est inutile',
     'упало {} (заберутся следующим проходом)':
         '{} en échec (reprises au passage suivant)',
+    'Новое название. Оно же станет именем папки — она переименуется вместе с каналом.':
+        'Nouveau nom. Il devient aussi le nom du dossier : celui-ci est renommé avec la chaîne.',
+    'Переименовать канал':
+        'Renommer la chaîne',
+    'Переименовать…':
+        'Renommer…',
+    'Сменить название канала вместе с его папкой.':
+        'Changer le nom de la chaîne et de son dossier.',
+    'в названии есть символы, недопустимые в имени папки':
+        'le nom contient des caractères interdits dans un nom de dossier',
+    'идёт проход выкачки — дождитесь его конца или остановите выкачку':
+        'un passage est en cours — attendez sa fin ou arrêtez le téléchargement',
+    'канал переименован: «{}» → «{}»':
+        'chaîne renommée : « {} » → « {} »',
+    'канал с таким названием уже есть':
+        'une chaîne porte déjà ce nom',
+    'название не может быть пустым':
+        'le nom ne peut pas être vide',
+    'название то же самое':
+        'le nom est le même',
+    'папка «{}» уже есть — сливать две папки молча нельзя':
+        'le dossier « {} » existe déjà — deux dossiers ne sont jamais fusionnés en silence',
+    'папку переименовать не вышло: {}':
+        'impossible de renommer le dossier : {}',
+    'такого канала в списке нет':
+        'cette chaîne n’est pas dans la liste',
 }

@@ -163,6 +163,79 @@ class ArchiveSource:
         ответ = self.write_channels(format_channels(стало))
         return _('{}: добавлен «{}»').format(ответ, name) if ответ.ok else ответ.text
 
+    def rename_channel(self, index: int, new_name: str) -> Записано:
+        """Переименовать канал вместе с его папкой.
+
+        Именно вместе. Имя канала задаёт папку, и переименование одного только
+        имени раскололо бы архив: новое пошло бы в новую папку, старое осталось
+        бы в прежней. Ровно это уже случалось, когда имя папки брали у YouTube.
+        """
+        from core.channels import (
+            FolderMove,
+            RenameVerdict,
+            check_rename,
+            format_channels,
+            judge_folder_rename,
+            parse_channels,
+            rename_channel,
+        )
+
+        # Идущий проход держит прежнее имя в памяти: переименуй мы папку сейчас,
+        # он завёл бы старую заново и доложил остаток канала туда.
+        if self.download_running():
+            return Записано(
+                False, _("идёт проход выкачки — дождитесь его конца или остановите выкачку")
+            )
+
+        разбор = parse_channels(self.channels_text())
+        if разбор.problems:
+            return Записано(False, _("в списке есть непонятые строки — сначала поправьте их"))
+
+        отказы = {
+            RenameVerdict.NO_SUCH: _("такого канала в списке нет"),
+            RenameVerdict.EMPTY: _("название не может быть пустым"),
+            RenameVerdict.FORBIDDEN: _("в названии есть символы, недопустимые в имени папки"),
+            RenameVerdict.SAME: _("название то же самое"),
+            RenameVerdict.DUPLICATE: _("канал с таким названием уже есть"),
+        }
+        приговор = check_rename(разбор.channels, index, new_name)
+        if приговор is not RenameVerdict.OK:
+            return Записано(False, отказы[приговор])
+
+        старое = разбор.channels[index].name
+        новое = new_name.strip()
+        откуда, куда = self.base / старое, self.base / новое
+        ход = judge_folder_rename(
+            old_exists=откуда.is_dir(),
+            new_exists=куда.exists(),
+            same_folder=старое.casefold() == новое.casefold(),
+        )
+        if ход is FolderMove.CONFLICT:
+            return Записано(
+                False,
+                _("папка «{}» уже есть — сливать две папки молча нельзя").format(новое),
+            )
+
+        # Сначала папка, потом список. Наоборот было бы хуже: список уже говорит
+        # новое имя, папка не переименовалась — и следующий проход начнёт
+        # складывать ролики в пустую новую папку.
+        if ход is FolderMove.MOVE:
+            try:
+                откуда.rename(куда)
+            except OSError as ошибка:
+                return Записано(False, _("папку переименовать не вышло: {}").format(ошибка))
+
+        ответ = self.write_channels(format_channels(rename_channel(разбор.channels, index, новое)))
+        if not ответ.ok:
+            # Список не записался — возвращаем папку, иначе имя и папка разойдутся.
+            if ход is FolderMove.MOVE:
+                try:
+                    куда.rename(откуда)
+                except OSError:
+                    pass
+            return ответ
+        return Записано(True, _("канал переименован: «{}» → «{}»").format(старое, новое))
+
     def log_tail(self, lines: int) -> list[str]:
         """Хвост самого свежего журнала.
 
