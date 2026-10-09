@@ -726,4 +726,6 @@
         'Videos im Archiv',
     'свободно на диске':
         'frei auf der Platte',
+    'yt-dlp не получает ролики, только раскадровки — обновите yt-dlp кнопкой в настройках':
+        'yt-dlp bekommt nur Vorschaubilder, keine Videos — aktualisieren Sie yt-dlp über die Schaltfläche in den Einstellungen',
 }

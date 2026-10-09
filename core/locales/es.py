@@ -726,4 +726,6 @@
         'vídeos en el archivo',
     'свободно на диске':
         'libre en el disco',
+    'yt-dlp не получает ролики, только раскадровки — обновите yt-dlp кнопкой в настройках':
+        'yt-dlp solo obtiene guiones gráficos, no los vídeos: actualice yt-dlp con el botón de los ajustes',
 }

@@ -48,7 +48,7 @@ def по_значению() -> set[str]:
     import sys
 
     sys.path.insert(0, str(КОРЕНЬ))
-    from core.flow import HOPELESS
+    from core.flow import HOPELESS, NO_VIDEO_REASON
     from core.probe import Diagnosis
     from core.status import RunState
 
@@ -58,6 +58,7 @@ def по_значению() -> set[str]:
     свои = {
         "не удалось прочитать список каналов",
         "проверка не дала ответа",
+        NO_VIDEO_REASON,
     }
     return (
         {состояние.value for состояние in RunState}

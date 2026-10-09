@@ -1330,10 +1330,21 @@ def run(source: ArchiveSource, *, selftest: bool = False) -> int:
     _назваться_системе()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setWindowIcon(значок())
+
+    # Окно уже открыто (скорее всего, спрятано в трей) — просим его показаться
+    # и уходим. Самопроверку это не касается: она строит окно и сразу выходит.
+    from gui.single import имя_соединения, попросить_показаться, слушать
+
+    имя = имя_соединения(source.config_path)
+    if not selftest and попросить_показаться(имя):
+        return 0
+
     # Без этого закрытие окна завершило бы программу вместе с треем.
     app.setQuitOnLastWindowClosed(False)
     применить(app)
     окно = Window(source, фоновые=not selftest)
+    if not selftest:
+        окно._одно_окно = слушать(имя, окно._показаться, окно)
     окно.show()
     if selftest:
         # Один оборот событий и выход: так сборка убеждается, что окно

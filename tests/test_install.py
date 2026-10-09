@@ -93,8 +93,18 @@ def test_список_пакетов_не_разошёлся_с_pyproject():
 def test_yt_dlp_ставится_всегда():
     """Без него программа бесполезна, и «поставьте сами» здесь — лишний шаг,
     на котором новичок и застрянет."""
-    assert "yt-dlp" in requirements(gui=False)
-    assert "yt-dlp" in requirements(gui=True)
+    assert "yt-dlp[default]" in requirements(gui=False)
+    assert "yt-dlp[default]" in requirements(gui=True)
+
+
+def test_yt_dlp_ставится_с_решателем_задач():
+    """Настоящий случай, выпуск 0.3.0: установщик ставил голый `yt-dlp`, без
+    решателя задач YouTube. Программа устанавливалась без единой ошибки и не
+    могла скачать ни одного ролика — «Only images are available for download».
+    Нашлось, когда установщик впервые прошёл на машине автора."""
+    assert "yt-dlp" not in requirements(gui=False), "голый yt-dlp ставится без решателя"
+    шаг = next(ш for ш in plan(Found(Platform.LINUX), Wishes()) if ш.kind is StepKind.PACKAGES)
+    assert "yt-dlp" in шаг.what.split(), "человеку показываем имя без довеска"
 
 
 def test_qt_ставится_только_с_окном():

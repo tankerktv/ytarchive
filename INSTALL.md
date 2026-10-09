@@ -251,7 +251,7 @@ The installer does nothing you could not do by hand:
 
 ```bash
 python -m venv .venv
-.venv/bin/python -m pip install ".[gui]" yt-dlp
+.venv/bin/python -m pip install ".[gui]" "yt-dlp[default]"
 .venv/bin/python ytarchive.py gui
 ```
 

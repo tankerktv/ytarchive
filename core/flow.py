@@ -48,6 +48,11 @@ HOPELESS = {
 }
 
 
+#: Причина остановки, когда yt-dlp не может получить ролики. Текст — ключ для
+#: перевода, как и остальные причины.
+NO_VIDEO_REASON = "yt-dlp не получает ролики, только раскадровки — обновите yt-dlp кнопкой в настройках"
+
+
 def decide_after_probe(
     diagnosis: Diagnosis, attempt: int, policy: RetryPolicy | None = None
 ) -> Decision:

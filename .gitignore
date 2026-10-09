@@ -23,6 +23,8 @@ downloads/
 __pycache__/
 *.py[cod]
 .venv/
+# Отложенные и запасные окружения тоже: `git add -A` однажды унёс такое в коммит.
+.venv*/
 venv/
 .pytest_cache/
 .ruff_cache/

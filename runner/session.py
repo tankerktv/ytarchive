@@ -19,8 +19,8 @@ from pathlib import Path
 from core.archive import parse_archive
 from core.channels import Channel, parse_channels
 from core.exclusions import Exclusions, apply_to
-from core.flow import Action, ChannelResult, SessionSummary, decide_after_probe
-from core.probe import diagnose
+from core.flow import NO_VIDEO_REASON, Action, ChannelResult, SessionSummary, decide_after_probe
+from core.probe import cannot_get_video, diagnose
 from core.rules import allows
 from core.progress import Event, EventKind, parse_line
 from core.crawl import CrawlPolicy, done_bytes, is_crawling, line_is_slow, observe, video_id_from_path
@@ -142,8 +142,11 @@ def download_channel(
     on_message: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     clock: Callable[[], float] = time.monotonic,
-) -> tuple[int, int]:
-    """Пройти по каналу. Возвращает (скачано, упало).
+) -> tuple[int, int, str]:
+    """Пройти по каналу. Возвращает (скачано, упало, причина остановки).
+
+    Причина пуста, когда канал пройден. Непустая значит, что проход надо
+    прекращать целиком: беда не в канале.
 
     Скачанное считается по приросту файла архива, а не по строкам вывода:
     в архив попадают только целиком собранные ролики, и это единственный
@@ -172,7 +175,7 @@ def download_channel(
         on_message(_('{}: пропущено по вашему выбору {}').format(channel.name, снято))
 
     if not очередь:
-        return 0, 0
+        return 0, 0, ""
 
     batch = archive_path.parent / f"batch-{channel.name}.txt"
     # Папка — по имени из нашего списка, а не по названию канала на YouTube:
@@ -190,9 +193,13 @@ def download_channel(
     следить = config.crawl.enabled
     отложено: list[str] = []
     подряд = 0
+    #: yt-dlp сказал, что роликов ему не получить. Дальше идти незачем.
+    безнадёжно = False
 
     def on_line(line: str) -> None:
-        nonlocal упало, отметки, текущий
+        nonlocal упало, отметки, текущий, безнадёжно
+        if cannot_get_video(line):
+            безнадёжно = True
         event = parse_line(line)
         if event.kind is EventKind.ERROR:
             упало += 1
@@ -210,6 +217,9 @@ def download_channel(
             отметки = ()
         if on_event is not None:
             on_event(event)
+
+    def стоп() -> bool:
+        return безнадёжно or (should_stop is not None and should_stop())
 
     def ползёт(now: float) -> bool:
         return следить and is_crawling(отметки, now, config.crawl)
@@ -232,7 +242,7 @@ def download_channel(
                 [*config.ytdlp, *args],
                 config.watchdog,
                 on_line=on_line,
-                should_stop=should_stop,
+                should_stop=стоп,
                 is_crawling=ползёт,
             )
         finally:
@@ -273,7 +283,7 @@ def download_channel(
         очередь = [v for v in исходная if v not in готово and v not in отложено]
 
     стало = _archive_ids(archive_path)
-    return len(стало - было), упало
+    return len(стало - было), упало, (NO_VIDEO_REASON if безнадёжно else "")
 
 
 def run_session(
@@ -349,10 +359,22 @@ def run_session(
                 break
             continue
 
-        скачано, упало = download_channel(
+        скачано, упало, причина = download_channel(
             channel, config, exclusions=exclusions,
             on_event=on_event, on_message=on_message, should_stop=should_stop,
         )
+        if причина:
+            # Проверка доступа этого не видит: она спрашивает список, а беда
+            # встаёт на самой загрузке. Без остановки каждый ролик каждого
+            # канала кончался бы тем же отказом — сотни строк и ни одного файла.
+            results.append(
+                ChannelResult(channel=channel.name, downloaded=скачано, stopped_reason=причина)
+            )
+            if on_stopped is not None:
+                on_stopped(channel.name, причина)
+            if on_message is not None:
+                on_message(_('{}: остановлено — {}').format(channel.name, _(причина)))
+            break
         results.append(ChannelResult(channel=channel.name, downloaded=скачано, failed=упало))
         if on_message is not None:
             on_message(_('{}: скачано {}, упало {}').format(channel.name, скачано, упало))

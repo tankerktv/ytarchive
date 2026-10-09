@@ -108,6 +108,22 @@ SIGNS: tuple[tuple[Diagnosis, tuple[str, ...]], ...] = (
 )
 
 
+#: Примета того, что yt-dlp не может получить сам ролик. Проверка доступа её
+#: не видит: она спрашивает только список, а задача YouTube встаёт на загрузке.
+NO_FORMATS = "only images are available"
+
+
+def cannot_get_video(line: str) -> bool:
+    """Говорит ли строка вывода, что роликов не получить вовсе.
+
+    Так выглядит yt-dlp без решателя задач YouTube: каждый ролик кончается
+    отказом «Requested format is not available», и проход по каналу в
+    шестьсот роликов — это шестьсот одинаковых отказов и ни одного файла.
+    Заметив примету, проход надо прекращать и звать человека.
+    """
+    return NO_FORMATS in line.lower()
+
+
 @dataclass(frozen=True)
 class ProbeResult:
     diagnosis: Diagnosis

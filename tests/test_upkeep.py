@@ -174,7 +174,9 @@ def test_свой_yt_dlp_обновляется_через_pip_окружени�
     """Пути здесь в одном стиле для всех систем: проверка с путями Windows
     падала на Linux, где обратная черта — обычный знак имени, а не разделитель."""
     команда = update_command("/opt/yta/.venv/bin/yt-dlp", "/opt/yta/.venv/bin", "/opt/yta/.venv/bin/python")
-    assert команда == ("/opt/yta/.venv/bin/python", "-m", "pip", "install", "--upgrade", "yt-dlp")
+    assert команда == (
+        "/opt/yta/.venv/bin/python", "-m", "pip", "install", "--upgrade", "yt-dlp[default]",
+    ), "с довеском: решатель задач YouTube обновляется вместе с yt-dlp"
 
 
 def test_регистр_пути_не_мешает_узнать_своё():

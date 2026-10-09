@@ -271,3 +271,61 @@ def test_неопознанный_ползущий_не_зацикливает(t
         ],
     )
     assert len(очереди) == 2
+
+
+# --- yt-dlp, который не может получить ролики --------------------------------
+
+
+def test_без_решателя_задач_проход_прекращается_и_зовёт_человека(tmp_path, monkeypatch):
+    """Настоящий случай: yt-dlp без решателя задач YouTube. Проверка доступа
+    проходит — она спрашивает только список, — а каждый ролик кончается
+    отказом. Без остановки это шестьсот одинаковых отказов на канал."""
+    from core.flow import NO_VIDEO_REASON
+    from runner.session import run_session
+
+    архив = tmp_path / "downloaded.txt"
+    архив.write_text("", encoding="utf-8")
+    каналы = tmp_path / "channels.txt"
+    каналы.write_text(
+        "Первый|https://youtube.com/@a/videos\nВторой|https://youtube.com/@b/videos\n",
+        encoding="utf-8",
+    )
+    загрузок = []
+    просьбы_остановиться = []
+
+    def подделка(argv, policy, *, on_line=None, should_stop=None, **kwargs):
+        if "--flat-playlist" in argv:
+            строки = ["aaaaaaaaaaa"] if "%(id)s" == argv[argv.index("--print") + 1] else [
+                "aaaaaaaaaaa\t600\t20260101\tРолик"
+            ]
+            return RunOutcome(verdict=Verdict.OK, exit_code=0, lines=строки, stdout_lines=строки)
+        загрузок.append(1)
+        # Дословно то, что печатает yt-dlp 2026.08.19 без yt-dlp-ejs.
+        on_line("WARNING: Only images are available for download. use --list-formats to see them")
+        просьбы_остановиться.append(should_stop())
+        on_line("ERROR: [youtube] aaaaaaaaaaa: Requested format is not available.")
+        return RunOutcome(verdict=Verdict.CANCELLED, exit_code=None)
+
+    monkeypatch.setattr(session, "run_watched", подделка)
+    config = SessionConfig(
+        base_dir=tmp_path,
+        channels_file=каналы,
+        settings=DownloadSettings(archive_path=str(архив), output_template="x"),
+    )
+    остановки = []
+    итог = run_session(config, on_stopped=lambda имя, причина: остановки.append((имя, причина)))
+
+    assert просьбы_остановиться == [True], "yt-dlp снят сразу, а не после всей очереди"
+    assert len(загрузок) == 1, "второй канал не трогаем: беда не в канале"
+    assert итог.needs_human
+    assert остановки == [("Первый", NO_VIDEO_REASON)]
+
+
+def test_обычный_отказ_ролика_проход_не_останавливает():
+    """Упавший ролик — обычное дело и забирается следующим проходом. Звать
+    человека из-за него значило бы звать каждый день."""
+    from core.probe import cannot_get_video
+
+    assert not cannot_get_video("ERROR: [youtube] aaaaaaaaaaa: Sign in to confirm.")
+    assert not cannot_get_video("ERROR: [youtube] aaaaaaaaaaa: Requested format is not available.")
+    assert cannot_get_video("WARNING: Only images are available for download. use --list-formats")

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import PurePath
 
+from core.install import YTDLP
+
 
 def update_command(found: str | None, venv_bin: str, python: str) -> tuple[str, ...]:
     """Команда обновления. Пустая — yt-dlp не найден, обновлять нечего.
@@ -24,7 +26,9 @@ def update_command(found: str | None, venv_bin: str, python: str) -> tuple[str, 
     if not found:
         return ()
     if _внутри(found, venv_bin):
-        return (python, "-m", "pip", "install", "--upgrade", "yt-dlp")
+        # С довеском `[default]`: вместе с yt-dlp обновляется и решатель задач
+        # YouTube. Они выходят парой, и отставший решатель — тот же отказ.
+        return (python, "-m", "pip", "install", "--upgrade", YTDLP)
     return (found, "-U")
 
 

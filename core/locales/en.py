@@ -655,4 +655,6 @@
         'videos in the archive',
     'свободно на диске':
         'free on disk',
+    'yt-dlp не получает ролики, только раскадровки — обновите yt-dlp кнопкой в настройках':
+        'yt-dlp gets only storyboards, not the videos — update yt-dlp with the button in the settings',
 }
