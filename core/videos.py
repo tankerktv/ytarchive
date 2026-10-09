@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 SEPARATOR = "\t"
+#: Дата в переписи: восемь цифр или NA, когда yt-dlp её не знает.
+_ДАТА_ИЛИ_ПУСТО = re.compile(r"^(\d{8}|NA|None)$")
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,9 @@ class Video:
     video_id: str
     title: str
     seconds: float = 0.0
+    #: Дата выхода, ГГГГММДД. Примерная и не у всех роликов есть: перепись
+    #: берёт её из надписи «3 года назад». Пусто — неизвестна.
+    upload_date: str = ""
 
     @property
     def url(self) -> str:
@@ -72,10 +77,21 @@ def parse_listing(text: str) -> Listing:
         if not очищенная.strip():
             continue
 
-        части = очищенная.split(SEPARATOR, 2)
+        части = очищенная.split(SEPARATOR, 3)
         if len(части) < 2 or not VIDEO_ID.match(части[0].strip()):
             плохие.append(очищенная.strip()[:160])
             continue
+
+        # Третьим полем идёт дата — с тех пор, как появились правила отбора.
+        # Строку без неё тоже понимаем: тогда всё после длительности —
+        # название, как и было. Иначе табуляция в названии старого образца
+        # отрезала бы от него начало.
+        дата = ""
+        if len(части) == 4 and _ДАТА_ИЛИ_ПУСТО.match(части[2].strip()):
+            дата = части[2].strip() if части[2].strip().isdigit() else ""
+            части = [части[0], части[1], части[3]]
+        elif len(части) == 4:
+            части = [части[0], части[1], SEPARATOR.join(части[2:])]
 
         try:
             секунды = float(части[1])
@@ -84,7 +100,12 @@ def parse_listing(text: str) -> Listing:
 
         название = части[2].strip() if len(части) > 2 else ""
         видео.append(
-            Video(video_id=части[0].strip(), title=название or части[0].strip(), seconds=секунды)
+            Video(
+                video_id=части[0].strip(),
+                title=название or части[0].strip(),
+                seconds=секунды,
+                upload_date=дата,
+            )
         )
 
     return Listing(videos=tuple(видео), unreadable=tuple(плохие))

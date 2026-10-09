@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.flow import SessionSummary
-from core.schedule import Rhythm, next_pause
+from core.schedule import Hours, Rhythm, clock_text, is_open, minutes_until_open, next_pause
 from runner.lockfile import acquire
 from runner.language import _
 
@@ -119,6 +119,8 @@ def run_forever(
     passes: int | None = None,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
+    hours: Hours | None = None,
+    minute_of_day: Callable[[], float] | None = None,
 ) -> int:
     """Крутить проходы, пока не попросят остановиться. Возвращает их число.
 
@@ -161,11 +163,37 @@ def run_forever(
             отмечено = сейчас
         return stop_requested(tools_dir)
 
+    минута = minute_of_day or _минута_суток
+
+    def закрыто() -> bool:
+        return not is_open(hours, минута())
+
+    def пора_прерваться() -> bool:
+        """Остановка для самой выкачки: просьба человека ИЛИ конец часов работы.
+
+        Разведено с `пора` намеренно. Конец часов — не просьба остановиться:
+        демон после него не уходит, а ждёт следующего открытия.
+        """
+        return пора() or закрыто()
+
     сделано = 0
     try:
         with замок:
             while passes is None or сделано < passes:
-                итог = make_pass(пора)
+                if закрыто():
+                    ждать_минут = minutes_until_open(hours, минута())
+                    открытие = clock_text(hours.start) if hours else ""
+                    скажи(_('вне часов работы — жду до {}').format(открытие))
+                    # Запас в секунду: проснувшись ровно на границе, можно
+                    # застать ещё закрытое окно и уснуть на целые сутки.
+                    if not пауза.выждать(
+                        ждать_минут * 60 + 1, пора_уходить=пора, отметиться=замок.heartbeat
+                    ):
+                        скажи(_("остановлено по просьбе"))
+                        break
+                    continue
+
+                итог = make_pass(пора_прерваться)
                 замок.heartbeat()
                 сделано += 1
                 # Про итог прохода не говорим: это дело самого прохода,
@@ -191,3 +219,12 @@ def run_forever(
         clear_stop(tools_dir)
 
     return сделано
+
+
+def _минута_суток() -> float:
+    """Который час, в минутах от полуночи. Настенное время, а не монотонное:
+    «качать с 23 до 7» — это про часы на стене."""
+    from datetime import datetime
+
+    сейчас = datetime.now()
+    return сейчас.hour * 60 + сейчас.minute + сейчас.second / 60

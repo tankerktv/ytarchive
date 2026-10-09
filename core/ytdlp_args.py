@@ -44,6 +44,9 @@ class DownloadSettings:
     #: сказал «да»: на недособранном архиве он обрывается на первом же
     #: скачанном ролике и остальное не забирает никогда.
     break_on_existing: bool = False
+    #: Потолок скорости, КиБ/с. Ноль — без потолка. Нужен тем, у кого выкачка
+    #: делит линию с остальным домом: без него она забирает всё.
+    rate_limit: int = 0
     extra: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
@@ -57,6 +60,8 @@ class DownloadSettings:
             raise ValueError("паузы не могут быть отрицательными")
         if self.socket_timeout <= 0:
             raise ValueError("предел сетевой операции должен быть положительным")
+        if self.rate_limit < 0:
+            raise ValueError("потолок скорости не может быть отрицательным")
 
 
 def format_selector(height: int) -> str:
@@ -124,6 +129,9 @@ def build_args(settings: DownloadSettings, url: str) -> list[str]:
     if settings.break_on_existing:
         args.append("--break-on-existing")
 
+    if settings.rate_limit:
+        args += ["--limit-rate", f"{settings.rate_limit}K"]
+
     args += list(settings.extra)
     args.append(url)
     return args
@@ -147,6 +155,11 @@ def build_batch_args(settings: DownloadSettings, batch_file: str) -> list[str]:
     return [*args, "--batch-file", batch_file]
 
 
+#: Строка переписи. Название последним: в нём бывает что угодно, включая
+#: табуляцию. Разбирает её `core.videos.parse_listing` — менять вместе.
+LISTING_FORMAT = "%(id)s\t%(duration)s\t%(upload_date)s\t%(title)s"
+
+
 def build_enumerate_args(settings: DownloadSettings, url: str) -> list[str]:
     """Аргументы для переписи канала: идентификаторы и названия.
 
@@ -161,10 +174,13 @@ def build_enumerate_args(settings: DownloadSettings, url: str) -> list[str]:
 
     args += [
         "--js-runtimes", "node",
-        "--extractor-args", "youtubetab:skip=authcheck",
+        # approximate_date: без него перепись не отдаёт дату вовсе, и правило
+        # «не старше» пришлось бы проверять загрузкой каждого ролика. Дата
+        # примерная — YouTube пишет «3 года назад», — но запросов не стоит.
+        "--extractor-args", "youtubetab:skip=authcheck;approximate_date",
         "--socket-timeout", str(settings.socket_timeout),
         "--flat-playlist",
-        "--print", "%(id)s\t%(duration)s\t%(title)s",
+        "--print", LISTING_FORMAT,
         "--no-warnings",
         url,
     ]

@@ -536,4 +536,157 @@
         'créer un environnement Python dans le dossier du programme (.venv)',
     'только показать шаги, ничего не трогая':
         'seulement montrer les étapes, sans rien modifier',
+    # --- надзор за скоростью, правила, уход за архивом ---
+    '  не убрался {}: {}':
+        '  non supprimé {} : {}',
+    '  … и ещё {} (показать все: --limit 0)':
+        '  … et {} de plus (tout afficher : --limit 0)',
+    ' КиБ/с':
+        ' Kio/s',
+    '23-7 или 23:00-07:30 — пусто: всегда':
+        '23-7 ou 23:00-07:30 — vide : toujours',
+    'yt-dlp {} — {}':
+        'yt-dlp {} — {}',
+    'yt-dlp поставлен не этой программой — обновите его тем же способом, каким ставили.':
+        'yt-dlp n’a pas été installé par ce programme — mettez-le à jour de la même façon que vous l’avez installé.',
+    '{}: медленно идёт всё подряд — похоже, дело в линии. До конца прохода не снимаю; порог задаётся в [limits] crawl_speed':
+        '{}: tout est lent — c’est sans doute la connexion. Plus de report jusqu’à la fin du passage ; le seuil se règle dans [limits] crawl_speed',
+    '{}: пропущено по правилам канала {}':
+        '{}: ignorées selon les règles de la chaîne : {}',
+    '{}: ролик {} идёт медленнее {:.0f} КБ/с уже {:.0f} мин — откладываю до следующего прохода':
+        '{}: la vidéo {} est plus lente que {:.0f} Ko/s depuis {:.0f} min — reportée au prochain passage',
+    'Адрес плейлиста, ролика или вкладки videos канала:':
+        'Adresse d’une playlist, d’une vidéo ou de l’onglet vidéos d’une chaîne :',
+    'Архив YouTube — нужен человек':
+        'Archive YouTube — on a besoin de vous',
+    'В учёте есть, файла нет — такие ролики заново не скачаются: {}':
+        'Enregistrées mais fichier absent — elles ne seront jamais retéléchargées : {}',
+    'Выполнить':
+        'Exécuter',
+    'ГГГГ-ММ-ДД — пусто: любые':
+        'AAAA-MM-JJ — vide : toutes',
+    'Добавить по адресу':
+        'Ajouter par adresse',
+    'Добавить по адресу…':
+        'Ajouter par adresse…',
+    'Куки YouTube:':
+        'Cookies YouTube :',
+    'Название. Оно же станет именем папки в архиве:':
+        'Nom. Ce sera aussi le nom du dossier dans l’archive :',
+    'Не длиннее:':
+        'Pas plus long que :',
+    'Не короче, не длиннее, не старше — одной строкой вместо сотни галочек.':
+        'Ni plus court, ni plus long, ni plus ancien — une ligne au lieu de cent cases.',
+    'Не короче:':
+        'Pas plus court que :',
+    'Не старше:':
+        'Pas plus ancien que :',
+    'Ничего не тронуто. Убрать повторные строки: ytarchive verify --apply':
+        'Rien n’a été modifié. Pour retirer les lignes en double : ytarchive verify --apply',
+    'Ничего не тронуто. Убрать: ytarchive clean --apply':
+        'Rien n’a été modifié. Pour supprimer : ytarchive clean --apply',
+    'Обновить yt-dlp':
+        'Mettre à jour yt-dlp',
+    'Обновление yt-dlp':
+        'Mise à jour de yt-dlp',
+    'Один ролик в нескольких файлах: {}':
+        'Une vidéo dans plusieurs fichiers : {}',
+    'Откладывать загрузку медленнее:':
+        'Reporter les téléchargements plus lents que :',
+    'Плейлист, отдельный ролик или канал, которого нет в поиске.':
+        'Une playlist, une vidéo seule ou une chaîne que la recherche ne trouve pas.',
+    'Повторных строк в учёте: {} (безвредно)':
+        'Lignes en double dans le registre : {} (sans gravité)',
+    'Потолок скорости:':
+        'Limite de débit :',
+    'Правила канала — {}':
+        'Règles de la chaîne — {}',
+    'Правила отбора: {}':
+        'Règles de sélection : {}',
+    'Правила…':
+        'Règles…',
+    'Правило вычёркивает ролики из очереди, но ничего не удаляет с диска: снимете правило — ролики вернутся в очередь. Ролик, у которого длительность или дата неизвестны, правилу не подчиняется.':
+        'Une règle retire des vidéos de la file mais ne supprime rien du disque : retirez la règle et elles reviennent. Une vidéo dont la durée ou la date est inconnue n’est pas concernée.',
+    'Сверить учёт с диском':
+        'Comparer le registre au disque',
+    'Сверка учёта с диском':
+        'Registre et disque',
+    'Старые журналы и обломки загрузок. Сначала покажет, что уберёт.':
+        'Anciens journaux et restes de téléchargements. Montre d’abord ce qui serait supprimé.',
+    'Убирать нечего.':
+        'Rien à supprimer.',
+    'Убрать повторные строки':
+        'Retirer les lignes en double',
+    'Убрать показанное':
+        'Supprimer ce qui est affiché',
+    'Убрать старое…':
+        'Supprimer l’ancien…',
+    'Уход за архивом:':
+        'Entretien de l’archive :',
+    'Учёт и диск сходятся.':
+        'Le registre et le disque concordent.',
+    'Файл есть, в учёте нет — такие ролики скачаются второй раз: {}':
+        'Fichier présent mais non enregistré — elles seront téléchargées une seconde fois : {}',
+    'Часы работы:':
+        'Heures de fonctionnement :',
+    'Чинить нечего: остальное — решение человека, а не программы.':
+        'Rien à réparer : le reste relève de votre décision, pas du programme.',
+    'Что можно убрать':
+        'Ce qui peut être supprimé',
+    'без потолка':
+        'sans limite',
+    'в учёте строк: {}, роликов на диске: {}':
+        'lignes dans le registre : {}, vidéos sur le disque : {}',
+    'вне часов работы — жду до {}':
+        'hors des heures de fonctionnement — attente jusqu’à {}',
+    'готово':
+        'terminé',
+    'журналов старше {} суток: {} ({:.1f} МБ)':
+        'journaux de plus de {} jours : {} ({:.1f} Mo)',
+    'закончено с замечаниями':
+        'terminé avec des remarques',
+    'идёт выкачка — учёт сейчас править нельзя ({})':
+        'un téléchargement est en cours — le registre ne peut pas être modifié maintenant ({})',
+    'из браузера {}':
+        'depuis le navigateur {}',
+    'из файла cookies.txt':
+        'depuis le fichier cookies.txt',
+    'не добавлен: {}':
+        'non ajouté : {}',
+    'не ограничено':
+        'sans limite',
+    'не проверять':
+        'ne pas vérifier',
+    'обломков загрузок, которые уже не пригодятся: {} ({:.1f} МБ)':
+        'restes de téléchargements devenus inutiles : {} ({:.1f} Mo)',
+    'обновить yt-dlp':
+        'mettre à jour yt-dlp',
+    'обновлён: {} → {}':
+        'mis à jour : {} → {}',
+    'папка {} не прочитана: {}':
+        'dossier {} illisible : {}',
+    'работаю…':
+        'en cours…',
+    'сверить учёт с файлами на диске':
+        'comparer le registre aux fichiers du disque',
+    'сколько строк каждого перечня показать (0 — все)':
+        'combien de lignes de chaque liste afficher (0 — toutes)',
+    'старые журналы и обломки загрузок':
+        'anciens journaux et restes de téléchargements',
+    'убрано журналов старше {} суток: {}':
+        'journaux de plus de {} jours supprimés : {}',
+    'убрано повторных строк: {}; прежний учёт сохранён как {}':
+        'lignes en double retirées : {} ; l’ancien registre est conservé sous {}',
+    'убрано файлов: {}':
+        'fichiers supprimés : {}',
+    'убрать повторные строки учёта':
+        'retirer les lignes en double du registre',
+    'убрать, а не только показать':
+        'supprimer, pas seulement afficher',
+    'уже последняя версия: {}':
+        'déjà la dernière version : {}',
+    'учёт не записан: {}':
+        'registre non écrit : {}',
+    'учёт не прочитан: {}':
+        'registre illisible : {}',
 }

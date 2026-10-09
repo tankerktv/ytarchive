@@ -162,9 +162,15 @@ working.
 > that anyone else can read. The calmest option is a separate account just
 > for the archive.
 
+**Or without a file.** The window’s settings have a “YouTube cookies”
+field: choose the browser in which you are signed in to YouTube, and the
+program takes the cookies straight from it. This works reliably with
+Firefox. Chrome and Edge on Windows encrypt their cookies and often cannot
+be read — then the file is the way.
+
 When the cookies expire the program says so in words — “cookies expired” —
-and waits instead of hammering every channel. The cure is repeating these
-five steps.
+and waits instead of hammering every channel. If the window is running it also shows a tray
+notification. The cure is repeating these five steps.
 
 ### Check that everything is in place
 
@@ -181,7 +187,9 @@ nothing. It works after the first run: before that there are no settings.
 1. The **Channels** tab — find a channel by name. Before adding it you can
    see how many videos it has and how much space they will take.
 2. Add the channel. If you do not want every video, open its list and
-   uncheck the ones you do not need.
+   uncheck the ones you do not need, or set the selection at once with
+   “Rules…”: no shorter, no longer, no older.
+   A playlist or a single video is added with “Add by address…”.
 3. The **Overview** tab → **Start**.
 
 You can close the window — it hides in the tray and the download carries on.
@@ -207,9 +215,13 @@ which ages fast because YouTube changes all the time.
 python install.py --yes
 ```
 
+The “Update yt-dlp” button in the window’s settings and the command
+`ytarchive.py update` do the same.
+
 If `yt-dlp` was already installed system-wide before, that copy is the one
 in use, not the one in the program’s environment — keep updating it the way
-you always have.
+you always have. The button then shows what yt-dlp itself answered when
+asked to update.
 
 ## Uninstalling
 
@@ -230,7 +242,8 @@ The archive lives elsewhere, and removing the program does not touch it.
 | `check` says “no node” right after installing it | the terminal was opened before the installation — open a new one |
 | Storyboard images are downloaded instead of videos | `node` is missing |
 | “cookies expired” | step 5, export the cookies again |
-| “yt-dlp is outdated” | run the installer again |
+| “yt-dlp is outdated” | the “Update yt-dlp” button in the settings, or the installer again |
+| The log says “slower than … — deferring” for every video | the connection is slower than the threshold; in the window’s settings set “Defer downloads slower than” to “do not check” |
 | The window does not open; the terminal says the window needs PySide6 | it was installed with `--no-gui`; run the installer without that option |
 
 ## Without the installer

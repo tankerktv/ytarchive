@@ -130,6 +130,7 @@ def run_watched(
     env: dict[str, str] | None = None,
     separate_streams: bool = False,
     should_stop: Callable[[], bool] | None = None,
+    is_crawling: Callable[[float], bool] | None = None,
 ) -> RunOutcome:
     """Запустить команду и держать её под надзором до конца.
 
@@ -231,6 +232,14 @@ def run_watched(
         if should_stop is not None and should_stop():
             killed, kill_failed = _kill_tree(process, policy.kill_grace)
             verdict = Verdict.CANCELLED
+            break
+
+        # Ползущую загрузку молчанием не поймать: она говорит. Считает прирост
+        # тот, кто разбирает строки; здесь только исполнение приговора.
+        # Завершившегося не трогаем — снимать уже нечего.
+        if is_crawling is not None and process.poll() is None and is_crawling(now):
+            killed, kill_failed = _kill_tree(process, policy.kill_grace)
+            verdict = Verdict.CRAWLING
             break
 
         exited = process.poll() is not None

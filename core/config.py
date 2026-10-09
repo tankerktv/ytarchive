@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.i18n import НАЗВАНИЯ, СИСТЕМНЫЙ
-from core.schedule import Rhythm
+from core.schedule import Hours, Rhythm, format_hours, parse_hours
 
 # tomllib появился в 3.11. На машине, где это писалось, настоящий
 # интерпретатор только 3.10 — а привязываться к тому, чего нет,
@@ -33,10 +33,21 @@ KNOWN_SECTIONS = {"paths", "download", "limits", "schedule", "interface"}
 KNOWN_INTERFACE = {"language"}
 #: Паузы задаются минутами: секунды в настройках, которые правит человек,
 #: читаются плохо — «1800» надо ещё поделить в уме.
-KNOWN_SCHEDULE = {"pause_idle", "pause_busy", "pause_trouble"}
+KNOWN_SCHEDULE = {"pause_idle", "pause_busy", "pause_trouble", "hours"}
 KNOWN_PATHS = {"base", "channels", "archive", "cookies", "logs", "excluded"}
-KNOWN_DOWNLOAD = {"height", "prefer_av1", "write_subs", "sub_langs", "break_on_existing"}
-KNOWN_LIMITS = {"silence_limit", "sleep_min", "sleep_max", "sleep_requests", "socket_timeout"}
+KNOWN_DOWNLOAD = {
+    "height", "prefer_av1", "write_subs", "sub_langs", "break_on_existing",
+    "cookies_browser", "rate_limit",
+}
+KNOWN_LIMITS = {
+    "silence_limit", "sleep_min", "sleep_max", "sleep_requests", "socket_timeout",
+    "crawl_minutes", "crawl_speed", "keep_logs_days",
+}
+
+#: Браузеры, из которых yt-dlp умеет брать куки. Список его, не наш:
+#: опечатку лучше поймать при чтении настроек, чем увидеть ночью отказом
+#: «unsupported browser» на каждом канале.
+BROWSERS = ("brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi", "whale")
 
 
 @dataclass(frozen=True)
@@ -61,6 +72,13 @@ class Limits:
     sleep_max: int = 45
     sleep_requests: int = 2
     socket_timeout: int = 30
+    #: Загрузка, которая говорит, но идёт медленнее `crawl_speed` КиБ/с дольше
+    #: `crawl_minutes` минут, снимается и откладывается до следующего прохода.
+    #: Ноль в скорости выключает проверку — на медленной линии так и надо.
+    crawl_minutes: float = 10.0
+    crawl_speed: int = 100
+    #: Сколько суток хранить журналы проходов. Ноль — не убирать никогда.
+    keep_logs_days: int = 30
 
 
 @dataclass(frozen=True)
@@ -75,6 +93,12 @@ class Config:
     #: Ритм проходов. Раньше его задавал планировщик Windows — «каждые
     #: полчаса», одинаково на все случаи.
     rhythm: Rhythm = field(default_factory=Rhythm)
+    #: Браузер, из которого брать куки. Пусто — из файла `paths.cookies`.
+    cookies_browser: str = ""
+    #: Потолок скорости, КиБ/с. Ноль — без потолка.
+    rate_limit: int = 0
+    #: Часы, когда качать можно. None — всегда.
+    hours: Hours | None = None
     #: Язык интерфейса. «system» значит «спросить у системы» — так и стоит
     #: по умолчанию: чужой язык на первом запуске хуже отсутствия выбора.
     language: str = СИСТЕМНЫЙ
@@ -146,6 +170,33 @@ def parse_config(data: dict) -> Config:
             f"sleep_max ({limits.sleep_max}): пауза между роликами — не зависание"
         )
 
+    if limits.crawl_minutes <= 0:
+        raise ConfigError(
+            "crawl_minutes должен быть больше нуля; чтобы выключить проверку, поставьте crawl_speed = 0"
+        )
+    if limits.crawl_speed < 0 or limits.keep_logs_days < 0:
+        raise ConfigError("crawl_speed и keep_logs_days не могут быть отрицательными")
+
+    cookies_browser = str(raw_download.get("cookies_browser", "")).strip().lower()
+    if cookies_browser and cookies_browser not in BROWSERS:
+        raise ConfigError(
+            f"cookies_browser = {cookies_browser!r} — такого браузера yt-dlp не знает. "
+            f"Понятные: {', '.join(BROWSERS)}; пусто — брать куки из файла"
+        )
+
+    rate_limit = raw_download.get("rate_limit", 0)
+    if not isinstance(rate_limit, int) or isinstance(rate_limit, bool) or rate_limit < 0:
+        raise ConfigError("rate_limit — целое число КиБ/с; 0 значит без потолка")
+    if rate_limit and limits.crawl_speed and rate_limit < limits.crawl_speed * 2:
+        # Иначе потолок сам делал бы каждую загрузку «ползущей», и надзорщик
+        # снимал бы ровно то, что человек попросил качать помедленнее.
+        raise ConfigError(
+            f"rate_limit ({rate_limit}) слишком близко к crawl_speed ({limits.crawl_speed}): "
+            "потолок скорости должен быть хотя бы вдвое выше порога ползущей загрузки, "
+            "иначе выкачка будет снимать сама себя. Поднимите rate_limit или "
+            "уменьшите crawl_speed (0 выключает проверку)"
+        )
+
     raw_schedule = data.get("schedule", {})
     if not isinstance(raw_schedule, dict):
         raise ConfigError("раздел [schedule] должен быть таблицей")
@@ -157,6 +208,7 @@ def parse_config(data: dict) -> Config:
             busy=float(raw_schedule.get("pause_busy", по_умолчанию.busy / 60)) * 60,
             trouble=float(raw_schedule.get("pause_trouble", по_умолчанию.trouble / 60)) * 60,
         )
+        hours = parse_hours(str(raw_schedule.get("hours", "")))
     except (TypeError, ValueError) as ошибка:
         raise ConfigError(f"раздел [schedule]: {ошибка}") from ошибка
 
@@ -176,6 +228,9 @@ def parse_config(data: dict) -> Config:
     return Config(
         paths=paths,
         rhythm=rhythm,
+        hours=hours,
+        cookies_browser=cookies_browser,
+        rate_limit=rate_limit,
         language=language,
         height=height,
         prefer_av1=bool(raw_download.get("prefer_av1", True)),
@@ -225,6 +280,13 @@ sub_langs = [{langs}]
 # Быстрый проход: включать ТОЛЬКО когда архив собран целиком, иначе
 # он оборвётся на первом же скачанном ролике и остальное не заберёт.
 break_on_existing = {str(config.break_on_existing).lower()}
+# Откуда брать куки YouTube. Пусто — из файла cookies (см. [paths]).
+# Иначе имя браузера: firefox, chrome, edge, brave и другие. Из Firefox
+# работает надёжно; Chrome и Edge на Windows куки шифруют, и yt-dlp
+# часто не может их прочитать.
+cookies_browser = {_toml_str(config.cookies_browser)}
+# Потолок скорости, КиБ/с. 0 — без потолка.
+rate_limit = {config.rate_limit}
 
 [limits]
 # Молчание дольше этого считается зависанием. Должно быть заметно больше
@@ -234,6 +296,13 @@ sleep_min = {config.limits.sleep_min}
 sleep_max = {config.limits.sleep_max}
 sleep_requests = {config.limits.sleep_requests}
 socket_timeout = {config.limits.socket_timeout}
+# Загрузку, которая идёт медленнее crawl_speed КиБ/с дольше crawl_minutes
+# минут, снимаем и откладываем до следующего прохода: скачанное не теряется.
+# На медленной линии поставьте crawl_speed = 0 — проверка выключится.
+crawl_minutes = {config.limits.crawl_minutes:g}
+crawl_speed = {config.limits.crawl_speed}
+# Сколько суток хранить журналы проходов. 0 — не убирать.
+keep_logs_days = {config.limits.keep_logs_days}
 
 [schedule]
 # Паузы между проходами, в минутах. Программа держит их сама — планировщик
@@ -244,6 +313,9 @@ pause_idle = {config.rhythm.idle / 60:g}
 pause_busy = {config.rhythm.busy / 60:g}
 # Нужен человек (истёкшие куки, устаревший yt-dlp): долбиться в стену незачем.
 pause_trouble = {config.rhythm.trouble / 60:g}
+# Часы, когда качать можно: "23-7" или "23:00-07:30". Пусто — всегда.
+# Вне этих часов обход ждёт, а идущую загрузку прерывает — она продолжится.
+hours = {_toml_str(format_hours(config.hours))}
 
 [interface]
 # Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.
@@ -277,6 +349,13 @@ sub_langs = ["ru", "en"]
 # Быстрый проход: включать ТОЛЬКО когда архив собран целиком, иначе
 # он оборвётся на первом же скачанном ролике и остальное не заберёт.
 break_on_existing = false
+# Откуда брать куки YouTube. Пусто — из файла cookies (см. [paths]).
+# Иначе имя браузера: firefox, chrome, edge, brave и другие. Из Firefox
+# работает надёжно; Chrome и Edge на Windows куки шифруют, и yt-dlp
+# часто не может их прочитать.
+cookies_browser = ""
+# Потолок скорости, КиБ/с. 0 — без потолка.
+rate_limit = 0
 
 [limits]
 # Молчание дольше этого считается зависанием. Должно быть заметно больше
@@ -286,6 +365,13 @@ sleep_min = 15
 sleep_max = 45
 sleep_requests = 2
 socket_timeout = 30
+# Загрузку, которая идёт медленнее crawl_speed КиБ/с дольше crawl_minutes
+# минут, снимаем и откладываем до следующего прохода: скачанное не теряется.
+# На медленной линии поставьте crawl_speed = 0 — проверка выключится.
+crawl_minutes = 10
+crawl_speed = 100
+# Сколько суток хранить журналы проходов. 0 — не убирать.
+keep_logs_days = 30
 
 [schedule]
 # Паузы между проходами, в минутах. Программа держит их сама — планировщик
@@ -293,6 +379,9 @@ socket_timeout = 30
 pause_idle = 30
 pause_busy = 1
 pause_trouble = 60
+# Часы, когда качать можно: "23-7" или "23:00-07:30". Пусто — всегда.
+# Вне этих часов обход ждёт, а идущую загрузку прерывает — она продолжится.
+hours = ""
 
 [interface]
 # Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.

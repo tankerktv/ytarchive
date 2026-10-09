@@ -11,8 +11,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+
+from core.rules import Rules, RulesError, format_rules, parse_rules
 
 SEPARATOR = "|"
 COMMENT_PREFIX = "#"
@@ -27,6 +29,9 @@ FORBIDDEN_IN_PATH = re.compile(r'[<>:"/\\|?*]')
 class Channel:
     name: str
     url: str
+    #: Правила отбора — третье поле строки. Пустые по умолчанию: строка
+    #: прежнего вида `Название|URL` значит ровно то же, что значила.
+    rules: Rules = Rules()
 
 
 @dataclass(frozen=True)
@@ -45,7 +50,10 @@ class ParseResult:
 
 
 HEADER = (
-    "# Каналы для выкачки. Формат: <Папка>|<адрес вкладки videos>\n"
+    "# Каналы для выкачки. Формат: <Папка>|<адрес>|<правила>\n"
+    "# Адрес — вкладка videos канала, плейлист или отдельный ролик.\n"
+    "# Правила необязательны: min=60;max=7200;after=2024-01-01\n"
+    "# (не короче и не длиннее стольких секунд, не старше даты).\n"
     "# Строки с # игнорируются. Название задаёт папку в архиве.\n"
     "# Переименовывать лучше из окна: оно переименует и папку. Поправив имя\n"
     "# здесь руками, получите новую папку, а прежняя останется как есть.\n"
@@ -59,7 +67,11 @@ def format_channels(channels: tuple[Channel, ...] | list[Channel]) -> str:
     и потеря канала при записи означала бы, что он просто перестанет
     качаться — молча, до тех пор пока кто-нибудь не заметит.
     """
-    строки = [f"{c.name}{SEPARATOR}{c.url}" for c in channels]
+    строки = []
+    for c in channels:
+        правила = format_rules(c.rules)
+        хвост = f"{SEPARATOR}{правила}" if правила else ""
+        строки.append(f"{c.name}{SEPARATOR}{c.url}{хвост}")
     return HEADER + "\n".join(строки) + ("\n" if строки else "")
 
 
@@ -119,7 +131,8 @@ def parse_channels(text: str) -> ParseResult:
             problems.append(Problem(number, line, "нет разделителя «|»"))
             continue
 
-        name, _, url = line.partition(SEPARATOR)
+        name, _, остальное = line.partition(SEPARATOR)
+        url, _, поле_правил = остальное.partition(SEPARATOR)
         name, url = name.strip(), url.strip()
 
         if not name:
@@ -143,8 +156,17 @@ def parse_channels(text: str) -> ParseResult:
             )
             continue
 
+        # Непонятое правило — причина пропустить строку целиком, а не
+        # качать канал без правил: человек отсёк короткие ролики, и скачай
+        # мы их «на всякий случай», он узнал бы об этом по забитому диску.
+        try:
+            rules = parse_rules(поле_правил)
+        except RulesError as ошибка:
+            problems.append(Problem(number, line, str(ошибка)))
+            continue
+
         seen_names[name] = number
-        channels.append(Channel(name=name, url=url))
+        channels.append(Channel(name=name, url=url, rules=rules))
 
     return ParseResult(channels=tuple(channels), problems=tuple(problems))
 
@@ -197,7 +219,9 @@ def rename_channel(
     if приговор is not RenameVerdict.OK:
         raise ValueError(f"переименовать нельзя: {приговор.value}")
     список = list(channels)
-    список[index] = Channel(name=new_name.strip(), url=список[index].url)
+    # Через replace, а не новой записью: иначе вместе со старым именем
+    # канал терял бы и правила отбора.
+    список[index] = replace(список[index], name=new_name.strip())
     return tuple(список)
 
 
@@ -226,3 +250,13 @@ def judge_folder_rename(*, old_exists: bool, new_exists: bool, same_folder: bool
     if new_exists and not same_folder:
         return FolderMove.CONFLICT
     return FolderMove.MOVE
+
+
+def set_rules(
+    channels: tuple[Channel, ...] | list[Channel], index: int, rules: Rules
+) -> tuple[Channel, ...]:
+    """Задать каналу правила отбора. Номер мимо списка — список как был."""
+    список = list(channels)
+    if 0 <= index < len(список):
+        список[index] = replace(список[index], rules=rules)
+    return tuple(список)

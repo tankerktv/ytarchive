@@ -159,9 +159,26 @@ class ArchiveSource:
             # Не переписываем файл, в котором есть непонятое: перезапись
             # потеряла бы эти строки молча.
             return _("в списке есть непонятые строки — сначала поправьте их")
-        стало = (*разбор.channels, Channel(name=name, url=url))
+        # Новую строку проверяем тем же разбором, что и файл. Иначе канал с
+        # двоеточием в названии записался бы, при чтении оказался «непонятой
+        # строкой», и окно отказалось бы править список вовсе.
+        проба = parse_channels(format_channels((Channel(name=name, url=url),)))
+        if проба.problems:
+            return _('не добавлен: {}').format(проба.problems[0].reason)
+        стало = (*разбор.channels, проба.channels[0])
         ответ = self.write_channels(format_channels(стало))
         return _('{}: добавлен «{}»').format(ответ, name) if ответ.ok else ответ.text
+
+    def set_rules(self, index: int, rules) -> Записано:
+        """Задать каналу правила отбора."""
+        from core.channels import format_channels, parse_channels, set_rules
+
+        разбор = parse_channels(self.channels_text())
+        if разбор.problems:
+            return Записано(False, _("в списке есть непонятые строки — сначала поправьте их"))
+        if not 0 <= index < len(разбор.channels):
+            return Записано(False, _("такого канала в списке нет"))
+        return self.write_channels(format_channels(set_rules(разбор.channels, index, rules)))
 
     def rename_channel(self, index: int, new_name: str) -> Записано:
         """Переименовать канал вместе с его папкой.

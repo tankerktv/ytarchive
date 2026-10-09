@@ -21,8 +21,10 @@ from core.channels import Channel, parse_channels
 from core.exclusions import Exclusions, apply_to
 from core.flow import Action, ChannelResult, SessionSummary, decide_after_probe
 from core.probe import diagnose
+from core.rules import allows
 from core.progress import Event, EventKind, parse_line
-from core.supervisor import RetryPolicy, WatchdogPolicy
+from core.crawl import CrawlPolicy, done_bytes, is_crawling, line_is_slow, observe, video_id_from_path
+from core.supervisor import RetryPolicy, Verdict, WatchdogPolicy
 from core.videos import Listing, parse_listing
 from core.ytdlp_args import (
     DownloadSettings,
@@ -52,6 +54,8 @@ class SessionConfig:
     probe_watchdog: WatchdogPolicy = field(
         default_factory=lambda: WatchdogPolicy(silence_limit=60.0, total_limit=180.0)
     )
+    #: Когда считать загрузку ползущей — второе мерило рядом с молчанием.
+    crawl: CrawlPolicy = field(default_factory=CrawlPolicy)
 
 
 def _read_text(path: Path) -> str | None:
@@ -137,6 +141,7 @@ def download_channel(
     on_event: Callable[[Event], None] | None = None,
     on_message: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> tuple[int, int]:
     """Пройти по каналу. Возвращает (скачано, упало).
 
@@ -154,7 +159,11 @@ def download_channel(
             _('{}: непонятых строк в переписи {}').format(channel.name, len(перепись.unreadable))
         )
 
-    очередь = [v.video_id for v in перепись.videos if v.video_id not in было]
+    новые = [v for v in перепись.videos if v.video_id not in было]
+    очередь = [v.video_id for v in новые if allows(channel.rules, v.seconds, v.upload_date)]
+    по_правилам = len(новые) - len(очередь)
+    if по_правилам and on_message is not None:
+        on_message(_('{}: пропущено по правилам канала {}').format(channel.name, по_правилам))
     всего_до = len(очередь)
     очередь = apply_to(очередь, исключения)
     снято = всего_до - len(очередь)
@@ -165,47 +174,103 @@ def download_channel(
     if not очередь:
         return 0, 0
 
-    # Список подаётся файлом: у канала бывает шестьсот роликов, и в командную
-    # строку они не влезут.
     batch = archive_path.parent / f"batch-{channel.name}.txt"
-    try:
-        batch.write_text("\n".join(очередь) + "\n", encoding="utf-8", newline="\n")
-    except OSError as ошибка:
-        if on_message is not None:
-            on_message(_('{}: не удалось записать список — {}').format(channel.name, ошибка))
-        return 0, 0
+    # Папка — по имени из нашего списка, а не по названию канала на YouTube:
+    # иначе переименование канала его владельцем раскалывает архив надвое.
+    settings = replace(
+        config.settings,
+        output_template=output_template_for(str(config.base_dir), channel.name),
+    )
 
+    исходная = list(очередь)
     упало = 0
+    #: Отметки прироста текущего файла и ролик, которому он принадлежит.
+    отметки: tuple = ()
+    текущий = ""
+    следить = config.crawl.enabled
+    отложено: list[str] = []
+    подряд = 0
 
     def on_line(line: str) -> None:
-        nonlocal упало
+        nonlocal упало, отметки, текущий
         event = parse_line(line)
         if event.kind is EventKind.ERROR:
             упало += 1
+        elif event.kind is EventKind.DESTINATION:
+            # Новый файл — счёт заново: видео и звук качаются порознь,
+            # и прирост одного нельзя мерить отметками другого.
+            текущий = video_id_from_path(event.path) or текущий
+            отметки = ()
+        elif event.kind is EventKind.PROGRESS:
+            сделано = done_bytes(event.percent, event.size_bytes)
+            if сделано is not None:
+                отметки = observe(отметки, clock(), сделано, config.crawl.window)
+        elif event.kind in (EventKind.COMPLETED, EventKind.MERGING, EventKind.SLEEPING, EventKind.ITEM):
+            # Слияние и паузы — законная тишина в прогрессе, а не ползание.
+            отметки = ()
         if on_event is not None:
             on_event(event)
 
-    try:
-        # Папка — по имени из нашего списка, а не по названию канала на YouTube:
-        # иначе переименование канала его владельцем раскалывает архив надвое.
-        settings = replace(
-            config.settings,
-            output_template=output_template_for(str(config.base_dir), channel.name),
-        )
-        args = build_batch_args(settings, str(batch))
-        run_watched(
-            [*config.ytdlp, *args],
-            config.watchdog,
-            on_line=on_line,
-            should_stop=should_stop,
-        )
-    finally:
-        # Список — вещь одноразовая: оставленный, он собьёт с толку при
-        # разборе беды, показав вчерашнюю очередь как сегодняшнюю.
+    def ползёт(now: float) -> bool:
+        return следить and is_crawling(отметки, now, config.crawl)
+
+    while очередь:
+        # Список подаётся файлом: у канала бывает шестьсот роликов, и в
+        # командную строку они не влезут.
         try:
-            batch.unlink()
-        except OSError:
-            pass
+            batch.write_text("\n".join(очередь) + "\n", encoding="utf-8", newline="\n")
+        except OSError as ошибка:
+            if on_message is not None:
+                on_message(_('{}: не удалось записать список — {}').format(channel.name, ошибка))
+            break
+
+        отметки, текущий = (), ""
+        перед = _archive_ids(archive_path)
+        try:
+            args = build_batch_args(settings, str(batch))
+            outcome = run_watched(
+                [*config.ytdlp, *args],
+                config.watchdog,
+                on_line=on_line,
+                should_stop=should_stop,
+                is_crawling=ползёт,
+            )
+        finally:
+            # Список — вещь одноразовая: оставленный, он собьёт с толку при
+            # разборе беды, показав вчерашнюю очередь как сегодняшнюю.
+            try:
+                batch.unlink()
+            except OSError:
+                pass
+
+        if outcome.verdict is not Verdict.CRAWLING:
+            break
+
+        # Ролик ползёт: снят, недокачанное осталось на диске и продолжится
+        # в следующий проход. Остальная очередь ждать его не должна.
+        готово = _archive_ids(archive_path)
+        подряд = 1 if len(готово) > len(перед) else подряд + 1
+        if on_message is not None:
+            on_message(
+                _('{}: ролик {} идёт медленнее {:.0f} КБ/с уже {:.0f} мин — откладываю до следующего прохода').format(
+                    channel.name, текущий or "?", config.crawl.min_speed / 1024, config.crawl.window / 60
+                )
+            )
+        if текущий:
+            отложено.append(текущий)
+        if not текущий or line_is_slow(подряд):
+            # Либо не знаем, кого откладывать, либо ползёт всё подряд — тогда
+            # дело в линии, а не в роликах. Дальше в этом проходе не снимаем:
+            # каждый следующий потерял бы те же минуты впустую.
+            следить = False
+            отложено = []
+            if on_message is not None:
+                on_message(
+                    _('{}: медленно идёт всё подряд — похоже, дело в линии. До конца прохода не снимаю; порог задаётся в [limits] crawl_speed').format(channel.name)
+                )
+        # От исходной очереди, а не от текущей: когда отложенные прощены,
+        # они обязаны в неё вернуться.
+        очередь = [v for v in исходная if v not in готово and v not in отложено]
 
     стало = _archive_ids(archive_path)
     return len(стало - было), упало

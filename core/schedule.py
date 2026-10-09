@@ -60,3 +60,78 @@ def next_pause(*, downloaded: int, needs_human: bool, rhythm: Rhythm) -> float:
     if downloaded > 0:
         return rhythm.busy
     return rhythm.idle
+
+
+# --- часы работы ---
+
+МИНУТ_В_СУТКАХ = 24 * 60
+
+
+@dataclass(frozen=True)
+class Hours:
+    """Отрезок суток, когда качать можно. Минуты от полуночи.
+
+    Начало позже конца — законно: «23:00–07:00» переходит через полночь,
+    и ради ночной выкачки это и задумано.
+    """
+
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        for значение in (self.start, self.end):
+            if not 0 <= значение < МИНУТ_В_СУТКАХ:
+                raise ValueError("время суток — от 00:00 до 23:59")
+        if self.start == self.end:
+            # Нулевой отрезок или целые сутки? Угадывать не будем: «качать
+            # всегда» задаётся пустой строкой, а не одинаковыми концами.
+            raise ValueError("начало и конец совпадают — чтобы качать всегда, оставьте поле пустым")
+
+
+def _минуты(текст: str) -> int:
+    часть = текст.strip()
+    часы, знак, минуты = часть.partition(":")
+    if not часы.isdigit() or (знак and not минуты.isdigit()):
+        raise ValueError(f"время пишется как ЧЧ или ЧЧ:ММ, а не «{часть}»")
+    итог = int(часы) * 60 + (int(минуты) if знак else 0)
+    if int(часы) > 23 or (знак and int(минуты) > 59):
+        raise ValueError(f"нет такого времени суток: «{часть}»")
+    return итог
+
+
+def parse_hours(text: str) -> Hours | None:
+    """Разобрать «23-7» или «23:00-07:30». Пустая строка — качать всегда."""
+    очищенный = text.strip()
+    if not очищенный:
+        return None
+    начало, знак, конец = очищенный.partition("-")
+    if not знак:
+        raise ValueError(f"часы работы пишутся как «23-7» или «23:00-07:30», а не «{очищенный}»")
+    return Hours(start=_минуты(начало), end=_минуты(конец))
+
+
+def format_hours(hours: Hours | None) -> str:
+    if hours is None:
+        return ""
+    return f"{clock_text(hours.start)}-{clock_text(hours.end)}"
+
+
+def clock_text(minute: int) -> str:
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def is_open(hours: Hours | None, minute: float) -> bool:
+    """Можно ли качать в эту минуту суток. Конец отрезка в него не входит."""
+    if hours is None:
+        return True
+    if hours.start < hours.end:
+        return hours.start <= minute < hours.end
+    return minute >= hours.start or minute < hours.end
+
+
+def minutes_until_open(hours: Hours | None, minute: float) -> float:
+    """Сколько минут ждать до открытия. Ноль — уже открыто."""
+    if is_open(hours, minute):
+        return 0.0
+    assert hours is not None
+    return (hours.start - minute) % МИНУТ_В_СУТКАХ

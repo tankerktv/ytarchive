@@ -43,8 +43,9 @@ from PySide6.QtWidgets import (
 
 from core.archive import parse_archive
 from core.channels import format_channels, move_channel, parse_channels, remove_channel
-from core.config import ConfigError, dump_config, loads, parse_config
-from core.status import RunState, build_status
+from core.config import BROWSERS, ConfigError, dump_config, loads, parse_config
+from core.schedule import format_hours, parse_hours
+from core.status import RunState, build_status, is_new_trouble
 from core.ytdlp_args import ALLOWED_HEIGHTS
 from gui.source import ArchiveSource
 from core.i18n import ИСХОДНЫЙ, НАЗВАНИЯ, СИСТЕМНЫЙ, нормализовать
@@ -193,6 +194,8 @@ class Window(QMainWindow):
 
         self._последний_журнал = ""
         self._предупредили_о_трее = False
+        #: О какой беде уже сказано всплывающим сообщением.
+        self._сказанная_беда = ""
         self._собрать_трей()
 
         self._логотипы = None
@@ -296,9 +299,17 @@ class Window(QMainWindow):
         self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         столбец.addWidget(self.находки)
 
+        ряд_добавить = QHBoxLayout()
         self.кнопка_добавить = QPushButton(_("Добавить выбранный канал"))
         self.кнопка_добавить.setEnabled(False)
-        столбец.addWidget(self.кнопка_добавить)
+        self.кнопка_по_адресу = QPushButton(_("Добавить по адресу…"))
+        self.кнопка_по_адресу.setToolTip(
+            _("Плейлист, отдельный ролик или канал, которого нет в поиске.")
+        )
+        ряд_добавить.addWidget(self.кнопка_добавить, 1)
+        ряд_добавить.addWidget(self.кнопка_по_адресу)
+        столбец.addLayout(ряд_добавить)
+        self.кнопка_по_адресу.clicked.connect(self._добавить_по_адресу)
 
         self.кнопка_искать.clicked.connect(self._искать)
         self.поле_поиска.returnPressed.connect(self._искать)
@@ -315,10 +326,14 @@ class Window(QMainWindow):
         self.таблица.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         столбец.addWidget(self.таблица)
 
-        столбец.addWidget(QLabel(
+        про_порядок = QLabel(
             _("Список каналов. Порядок здесь — это порядок обхода: верхний "
             "забирается первым.")
-        ))
+        )
+        # С переносом: по-немецки эта строка вдвое длиннее и без него
+        # распирала окно до 1250 точек.
+        про_порядок.setWordWrap(True)
+        столбец.addWidget(про_порядок)
         ряд_списка = QHBoxLayout()
         self.список_каналов = QTableWidget(0, 4)
         self.список_каналов.setHorizontalHeaderLabels(["", _("Канал"), _("Файлов"), _("Объём")])
@@ -343,12 +358,17 @@ class Window(QMainWindow):
         self.кнопка_ролики.setToolTip(
             _("Список роликов канала с галочками. По умолчанию отмечены все.")
         )
+        self.кнопка_правила = QPushButton(_("Правила…"))
+        self.кнопка_правила.setToolTip(
+            _("Не короче, не длиннее, не старше — одной строкой вместо сотни галочек.")
+        )
         for к in (
             self.кнопка_вверх,
             self.кнопка_вниз,
             self.кнопка_убрать,
             self.кнопка_имя,
             self.кнопка_ролики,
+            self.кнопка_правила,
         ):
             к.setEnabled(False)
             кнопки.addWidget(к)
@@ -366,6 +386,7 @@ class Window(QMainWindow):
         self.кнопка_убрать.clicked.connect(self._убрать_канал)
         self.кнопка_ролики.clicked.connect(self._выбрать_ролики)
         self.кнопка_имя.clicked.connect(self._переименовать_канал)
+        self.кнопка_правила.clicked.connect(self._правила_канала)
         self.список_каналов.itemSelectionChanged.connect(self._выбор_канала)
         self._каналы: list = []
         self._перечитать_каналы()
@@ -382,6 +403,45 @@ class Window(QMainWindow):
         self.кнопка_убрать.setEnabled(есть)
         self.кнопка_имя.setEnabled(есть)
         self.кнопка_ролики.setEnabled(есть)
+        self.кнопка_правила.setEnabled(есть)
+
+    def _правила_канала(self) -> None:
+        строки = self.список_каналов.selectionModel().selectedRows()
+        if not строки:
+            return
+        номер = строки[0].row()
+        канал = self._каналы[номер]
+
+        from gui.upkeep import ОкноПравил
+
+        окно = ОкноПравил(канал.name, канал.rules, self)
+        if not окно.exec():
+            return
+        ответ = self.source.set_rules(номер, окно.правила)
+        self.каналы_ответ.setText(
+            ответ.text + (_(" — вступит в силу со следующего прохода") if ответ.ok else "")
+        )
+        self._перечитать_каналы()
+        self.список_каналов.selectRow(номер)
+
+    def _добавить_по_адресу(self) -> None:
+        адрес, согласие = QInputDialog.getText(
+            self,
+            _("Добавить по адресу"),
+            _("Адрес плейлиста, ролика или вкладки videos канала:"),
+        )
+        адрес = адрес.strip()
+        if not согласие or not адрес:
+            return
+        имя, согласие = QInputDialog.getText(
+            self,
+            _("Добавить по адресу"),
+            _("Название. Оно же станет именем папки в архиве:"),
+        )
+        if not согласие or not имя.strip():
+            return
+        self.поиск_ответ.setText(self.source.add_channel(имя.strip(), адрес))
+        self._перечитать_каналы()
 
     def _выбрать_ролики(self) -> None:
         строки = self.список_каналов.selectionModel().selectedRows()
@@ -548,7 +608,15 @@ class Window(QMainWindow):
             if путь is not None:
                 значок.setIcon(QIcon(str(путь)))
             self.список_каналов.setItem(номер, 0, значок)
-            self.список_каналов.setItem(номер, 1, QTableWidgetItem(канал.name))
+            название = QTableWidgetItem(канал.name)
+            if канал.rules:
+                # Правило невидимо, пока не откроешь окно: без подсказки человек
+                # будет гадать, почему у канала качается не всё.
+                from core.rules import format_rules
+
+                название.setText(f"{канал.name}  ⚙")
+                название.setToolTip(_("Правила отбора: {}").format(format_rules(канал.rules)))
+            self.список_каналов.setItem(номер, 1, название)
             self.список_каналов.setItem(номер, 2, QTableWidgetItem(str(файлов) if файлов else "—"))
             self.список_каналов.setItem(
                 номер, 3, QTableWidgetItem(_('{:.1f} ГБ').format(байт / 1024**3) if байт else "—")
@@ -607,12 +675,33 @@ class Window(QMainWindow):
         self.поле_пауза_макс.setRange(0, 600)
         self.поле_пауза_макс.setSuffix(_(" с"))
 
+        self.поле_куки = QComboBox()
+        self.поле_куки.addItem(_("из файла cookies.txt"), "")
+        for браузер in BROWSERS:
+            self.поле_куки.addItem(_("из браузера {}").format(браузер.capitalize()), браузер)
+        self.поле_скорость = QSpinBox()
+        self.поле_скорость.setRange(0, 10_000_000)
+        self.поле_скорость.setSingleStep(256)
+        self.поле_скорость.setSuffix(_(" КиБ/с"))
+        self.поле_скорость.setSpecialValueText(_("без потолка"))
+        self.поле_ползёт = QSpinBox()
+        self.поле_ползёт.setRange(0, 1_000_000)
+        self.поле_ползёт.setSingleStep(10)
+        self.поле_ползёт.setSuffix(_(" КиБ/с"))
+        self.поле_ползёт.setSpecialValueText(_("не проверять"))
+        self.поле_часы = QLineEdit()
+        self.поле_часы.setPlaceholderText(_("23-7 или 23:00-07:30 — пусто: всегда"))
+
         форма.addRow(_("Качество:"), self.поле_качество)
         форма.addRow("", self.поле_av1)
         форма.addRow("", self.поле_субтитры)
         форма.addRow(_("Считать зависшим после:"), self.поле_молчание)
         форма.addRow(_("Пауза между роликами, от:"), self.поле_пауза_мин)
         форма.addRow(_("до:"), self.поле_пауза_макс)
+        форма.addRow(_("Куки YouTube:"), self.поле_куки)
+        форма.addRow(_("Потолок скорости:"), self.поле_скорость)
+        форма.addRow(_("Откладывать загрузку медленнее:"), self.поле_ползёт)
+        форма.addRow(_("Часы работы:"), self.поле_часы)
         столбец.addLayout(форма)
 
         про_папку = QLabel(
@@ -644,6 +733,33 @@ class Window(QMainWindow):
         self.настройки_ответ.setStyleSheet("color: #666;")
         ряд.addWidget(self.настройки_ответ)
         столбец.addLayout(ряд)
+
+        # --- уход за архивом ---
+        столбец.addWidget(QLabel(_("Уход за архивом:")))
+        ряд_ухода = QHBoxLayout()
+        обновить_ytdlp = QPushButton(_("Обновить yt-dlp"))
+        сверить = QPushButton(_("Сверить учёт с диском"))
+        убрать = QPushButton(_("Убрать старое…"))
+        убрать.setToolTip(_("Старые журналы и обломки загрузок. Сначала покажет, что уберёт."))
+        for кнопка in (обновить_ytdlp, сверить, убрать):
+            ряд_ухода.addWidget(кнопка)
+        ряд_ухода.addStretch(1)
+        столбец.addLayout(ряд_ухода)
+        обновить_ytdlp.clicked.connect(
+            lambda: self._команда(_("Обновление yt-dlp"), ("update",))
+        )
+        сверить.clicked.connect(
+            lambda: self._команда(
+                _("Сверка учёта с диском"), ("verify",),
+                применить=("verify", "--apply"), подпись=_("Убрать повторные строки"),
+            )
+        )
+        убрать.clicked.connect(
+            lambda: self._команда(
+                _("Что можно убрать"), ("clean",),
+                применить=("clean", "--apply"), подпись=_("Убрать показанное"),
+            )
+        )
         столбец.addStretch(1)
 
         сохранить.clicked.connect(self._сохранить_настройки)
@@ -651,6 +767,14 @@ class Window(QMainWindow):
         self.кнопка_обзор.clicked.connect(self._выбрать_папку)
         self._перечитать_настройки()
         return корень
+
+    def _команда(self, заголовок: str, доводы: tuple, *, применить: tuple = (), подпись: str = "") -> None:
+        from gui.upkeep import ОкноКоманды
+
+        ОкноКоманды(
+            self.source.config_path, заголовок, доводы,
+            применить=применить, подпись_применить=подпись, parent=self,
+        ).exec()
 
     def _выбрать_папку(self) -> None:
         """Выбрать рабочую папку. Согласие спрашивается словами о последствиях:
@@ -700,16 +824,28 @@ class Window(QMainWindow):
         self.поле_молчание.setValue(int(config.limits.silence_limit))
         self.поле_пауза_мин.setValue(config.limits.sleep_min)
         self.поле_пауза_макс.setValue(config.limits.sleep_max)
+        место = self.поле_куки.findData(config.cookies_browser)
+        self.поле_куки.setCurrentIndex(место if место >= 0 else 0)
+        self.поле_скорость.setValue(config.rate_limit)
+        self.поле_ползёт.setValue(config.limits.crawl_speed)
+        self.поле_часы.setText(format_hours(config.hours))
         self.настройки_ответ.setText("")
 
     def _сохранить_настройки(self) -> None:
         from dataclasses import replace
 
+        try:
+            часы = parse_hours(self.поле_часы.text())
+        except ValueError as ошибка:
+            QMessageBox.warning(self, _("Не сохранил"), str(ошибка))
+            self.настройки_ответ.setText(_("не сохранено"))
+            return
         пределы = replace(
             self._config.limits,
             silence_limit=float(self.поле_молчание.value()),
             sleep_min=self.поле_пауза_мин.value(),
             sleep_max=self.поле_пауза_макс.value(),
+            crawl_speed=self.поле_ползёт.value(),
         )
         пути = replace(self._config.paths, base=self.поле_папка.text())
         язык_сменился = self.поле_язык.currentData() != self._config.language
@@ -722,6 +858,9 @@ class Window(QMainWindow):
             prefer_av1=self.поле_av1.isChecked(),
             write_subs=self.поле_субтитры.isChecked(),
             limits=пределы,
+            cookies_browser=self.поле_куки.currentData(),
+            rate_limit=self.поле_скорость.value(),
+            hours=часы,
         )
         текст = dump_config(новый)
         try:
@@ -911,6 +1050,19 @@ class Window(QMainWindow):
         self.кнопка_пуск.setEnabled(not обход_работает)
         self.кнопка_стоп.setEnabled(обход_работает)
 
+        # Беда, требующая человека, говорится всплывающим сообщением: окно
+        # обычно свёрнуто в трей, и «истекли куки» в заголовке никто не видит —
+        # выкачка могла стоять днями.
+        беда = (живое.stopped_reason if живое else "") or ""
+        if is_new_trouble(self._сказанная_беда, беда):
+            self.трей.showMessage(
+                _("Архив YouTube — нужен человек"),
+                _(беда),
+                QSystemTrayIcon.MessageIcon.Warning,
+                15000,
+            )
+        self._сказанная_беда = беда
+
         self.трей.setIcon(нарисовать_значок(ЦВЕТА[снимок.state]))
         self.трей.setToolTip(_('Архив YouTube — {}').format(снимок.headline(_)))
 
@@ -1027,3 +1179,16 @@ def _проверить_окно_роликов(source: ArchiveSource) -> None:
     окно._показать_предпросмотр()
     окно._дождаться_потоков()
     окно.deleteLater()
+
+    from core.rules import Rules
+    from gui.upkeep import ОкноКоманды, ОкноПравил
+
+    правила = ОкноПравил("проверка", Rules(min_seconds=60, after="20240101"))
+    assert правила.собрать() == Rules(min_seconds=60, after="20240101")
+    правила.deleteLater()
+    # Команду не запускаем: самопроверка не должна ничего трогать на диске.
+    команда = ОкноКоманды(
+        source.config_path, "проверка", ("clean",), применить=("clean", "--apply"), запустить=False
+    )
+    команда.done(0)
+    команда.deleteLater()

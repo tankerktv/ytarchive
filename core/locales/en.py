@@ -463,4 +463,157 @@
         'create a Python environment in the program folder (.venv)',
     'только показать шаги, ничего не трогая':
         'only show the steps, changing nothing',
+    # --- надзор за скоростью, правила, уход за архивом ---
+    '  не убрался {}: {}':
+        '  could not remove {}: {}',
+    '  … и ещё {} (показать все: --limit 0)':
+        '  … and {} more (show all: --limit 0)',
+    ' КиБ/с':
+        ' KiB/s',
+    '23-7 или 23:00-07:30 — пусто: всегда':
+        '23-7 or 23:00-07:30 — empty: always',
+    'yt-dlp {} — {}':
+        'yt-dlp {} — {}',
+    'yt-dlp поставлен не этой программой — обновите его тем же способом, каким ставили.':
+        'yt-dlp was not installed by this program — update it the same way you installed it.',
+    '{}: медленно идёт всё подряд — похоже, дело в линии. До конца прохода не снимаю; порог задаётся в [limits] crawl_speed':
+        '{}: everything is slow — it looks like the connection, not the videos. No more deferring until the end of this pass; the threshold is [limits] crawl_speed',
+    '{}: пропущено по правилам канала {}':
+        '{}: skipped by the channel rules: {}',
+    '{}: ролик {} идёт медленнее {:.0f} КБ/с уже {:.0f} мин — откладываю до следующего прохода':
+        '{}: video {} has been slower than {:.0f} KB/s for {:.0f} min — deferring it to the next pass',
+    'Адрес плейлиста, ролика или вкладки videos канала:':
+        'Address of a playlist, a video or a channel’s videos tab:',
+    'Архив YouTube — нужен человек':
+        'YouTube Archive — needs you',
+    'В учёте есть, файла нет — такие ролики заново не скачаются: {}':
+        'Recorded but the file is missing — these will never be downloaded again: {}',
+    'Выполнить':
+        'Run',
+    'ГГГГ-ММ-ДД — пусто: любые':
+        'YYYY-MM-DD — empty: any',
+    'Добавить по адресу':
+        'Add by address',
+    'Добавить по адресу…':
+        'Add by address…',
+    'Куки YouTube:':
+        'YouTube cookies:',
+    'Название. Оно же станет именем папки в архиве:':
+        'Name. It also becomes the folder name in the archive:',
+    'Не длиннее:':
+        'No longer than:',
+    'Не короче, не длиннее, не старше — одной строкой вместо сотни галочек.':
+        'No shorter, no longer, no older — one line instead of a hundred checkboxes.',
+    'Не короче:':
+        'No shorter than:',
+    'Не старше:':
+        'No older than:',
+    'Ничего не тронуто. Убрать повторные строки: ytarchive verify --apply':
+        'Nothing was changed. To remove the duplicate lines: ytarchive verify --apply',
+    'Ничего не тронуто. Убрать: ytarchive clean --apply':
+        'Nothing was changed. To remove: ytarchive clean --apply',
+    'Обновить yt-dlp':
+        'Update yt-dlp',
+    'Обновление yt-dlp':
+        'Updating yt-dlp',
+    'Один ролик в нескольких файлах: {}':
+        'One video in several files: {}',
+    'Откладывать загрузку медленнее:':
+        'Defer downloads slower than:',
+    'Плейлист, отдельный ролик или канал, которого нет в поиске.':
+        'A playlist, a single video, or a channel the search does not find.',
+    'Повторных строк в учёте: {} (безвредно)':
+        'Duplicate lines in the record: {} (harmless)',
+    'Потолок скорости:':
+        'Speed limit:',
+    'Правила канала — {}':
+        'Channel rules — {}',
+    'Правила отбора: {}':
+        'Selection rules: {}',
+    'Правила…':
+        'Rules…',
+    'Правило вычёркивает ролики из очереди, но ничего не удаляет с диска: снимете правило — ролики вернутся в очередь. Ролик, у которого длительность или дата неизвестны, правилу не подчиняется.':
+        'A rule takes videos out of the queue but deletes nothing from disk: remove the rule and they return to the queue. A video whose duration or date is unknown is not affected by the rule.',
+    'Сверить учёт с диском':
+        'Check the record against the disk',
+    'Сверка учёта с диском':
+        'Record against disk',
+    'Старые журналы и обломки загрузок. Сначала покажет, что уберёт.':
+        'Old logs and leftovers of downloads. It shows what it would remove first.',
+    'Убирать нечего.':
+        'Nothing to remove.',
+    'Убрать повторные строки':
+        'Remove duplicate lines',
+    'Убрать показанное':
+        'Remove what is shown',
+    'Убрать старое…':
+        'Remove old files…',
+    'Уход за архивом:':
+        'Archive upkeep:',
+    'Учёт и диск сходятся.':
+        'The record and the disk agree.',
+    'Файл есть, в учёте нет — такие ролики скачаются второй раз: {}':
+        'File present but not recorded — these will be downloaded a second time: {}',
+    'Часы работы:':
+        'Working hours:',
+    'Чинить нечего: остальное — решение человека, а не программы.':
+        'Nothing to fix: the rest is for you to decide, not the program.',
+    'Что можно убрать':
+        'What can be removed',
+    'без потолка':
+        'no limit',
+    'в учёте строк: {}, роликов на диске: {}':
+        'lines in the record: {}, videos on disk: {}',
+    'вне часов работы — жду до {}':
+        'outside working hours — waiting until {}',
+    'готово':
+        'done',
+    'журналов старше {} суток: {} ({:.1f} МБ)':
+        'logs older than {} days: {} ({:.1f} MB)',
+    'закончено с замечаниями':
+        'finished with remarks',
+    'идёт выкачка — учёт сейчас править нельзя ({})':
+        'a download is running — the record cannot be edited now ({})',
+    'из браузера {}':
+        'from the {} browser',
+    'из файла cookies.txt':
+        'from the cookies.txt file',
+    'не добавлен: {}':
+        'not added: {}',
+    'не ограничено':
+        'no limit',
+    'не проверять':
+        'do not check',
+    'обломков загрузок, которые уже не пригодятся: {} ({:.1f} МБ)':
+        'leftovers of downloads that are no longer needed: {} ({:.1f} MB)',
+    'обновить yt-dlp':
+        'update yt-dlp',
+    'обновлён: {} → {}':
+        'updated: {} → {}',
+    'папка {} не прочитана: {}':
+        'folder {} could not be read: {}',
+    'работаю…':
+        'working…',
+    'сверить учёт с файлами на диске':
+        'check the record against the files on disk',
+    'сколько строк каждого перечня показать (0 — все)':
+        'how many lines of each list to show (0 — all)',
+    'старые журналы и обломки загрузок':
+        'old logs and leftovers of downloads',
+    'убрано журналов старше {} суток: {}':
+        'removed logs older than {} days: {}',
+    'убрано повторных строк: {}; прежний учёт сохранён как {}':
+        'duplicate lines removed: {}; the previous record is kept as {}',
+    'убрано файлов: {}':
+        'files removed: {}',
+    'убрать повторные строки учёта':
+        'remove duplicate lines from the record',
+    'убрать, а не только показать':
+        'remove, not just show',
+    'уже последняя версия: {}':
+        'already the latest version: {}',
+    'учёт не записан: {}':
+        'the record was not written: {}',
+    'учёт не прочитан: {}':
+        'the record could not be read: {}',
 }

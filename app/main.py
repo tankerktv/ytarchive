@@ -10,6 +10,9 @@
     ytarchive run             качать — один проход и выход
     ytarchive daemon          качать непрерывно, своим расписанием
     ytarchive stop            попросить работающий экземпляр остановиться
+    ytarchive verify          сверить учёт с файлами на диске
+    ytarchive clean           показать, что из старого можно убрать
+    ytarchive update          обновить yt-dlp
     ytarchive gui             окно наблюдения
 """
 
@@ -24,6 +27,7 @@ from pathlib import Path
 
 from core.archive import parse_archive
 from core.channels import parse_channels
+from core.crawl import CrawlPolicy
 from core.config import (
     DEFAULT_CONFIG_TEXT,
     HOME_MARK,
@@ -33,7 +37,10 @@ from core.config import (
     loads,
     parse_config,
 )
+from core.cleanup import FileInfo, is_leftover, old_logs, stale_leftovers, total_size
 from core.exclusions import Exclusions, parse_exclusions
+from core.update import update_command
+from core.verify import compare, without_duplicates
 from core.flow import SessionSummary
 from core.planner import estimate_range
 from core.livestate import (
@@ -81,7 +88,11 @@ def build_session(config: Config, base: Path) -> SessionConfig:
         # Запасной шаблон: цикл выкачки подставляет свой на каждый канал, с
         # папкой по имени из списка (см. core.ytdlp_args.output_template_for).
         output_template=str(base / "%(channel)s" / FILE_TEMPLATE),
-        cookies_file=str(cookies) if cookies.exists() else None,
+        # Браузер перевешивает файл: человек выбрал его явно, а файл мог
+        # остаться с прежних времён. Оба сразу yt-dlp не принимает.
+        cookies_file=str(cookies) if (cookies.exists() and not config.cookies_browser) else None,
+        cookies_browser=config.cookies_browser or None,
+        rate_limit=config.rate_limit,
         height=config.height,
         prefer_av1=config.prefer_av1,
         write_subs=config.write_subs,
@@ -97,6 +108,10 @@ def build_session(config: Config, base: Path) -> SessionConfig:
         channels_file=resolve(base, config.paths.channels),
         settings=settings,
         watchdog=WatchdogPolicy(silence_limit=config.limits.silence_limit),
+        crawl=CrawlPolicy(
+            window=config.limits.crawl_minutes * 60,
+            min_speed=config.limits.crawl_speed * 1024,
+        ),
     )
 
 
@@ -166,7 +181,11 @@ def cmd_plan(args) -> int:
     if archive.unreadable:
         print(_('  непонятных строк в архиве: {}').format(len(archive.unreadable)))
     print(_('качество:   до {}p').format(config.height) + (_(", предпочтение AV1") if config.prefer_av1 else ""))
-    print(_('куки:       {}').format(session.settings.cookies_file or _('не заданы — YouTube откажет')))
+    print(_('куки:       {}').format(
+        session.settings.cookies_file
+        or (_('из браузера {}').format(config.cookies_browser) if config.cookies_browser else "")
+        or _('не заданы — YouTube откажет')
+    ))
     print()
     print(_("Сколько займёт час материала при измеренных битрейтах:"))
     низ, верх = estimate_range(3600)
@@ -257,6 +276,13 @@ def один_проход(config: Config, base: Path, session: SessionConfig, sh
         return SessionSummary()
     скажи(объяснение)
 
+    # Каждый проход заводит свой журнал, и за месяц их набирается под две
+    # тысячи. Убираем здесь, под замком прохода, и говорим об этом в журнал:
+    # молча исчезающие файлы — то, чего в этой программе быть не должно.
+    убрано = убрать_старые_журналы(logs_dir, config.limits.keep_logs_days, кроме=log_path)
+    if убрано:
+        скажи(_('убрано журналов старше {} суток: {}').format(config.limits.keep_logs_days, убрано))
+
     try:
         with lock:
             def on_event(event: Event) -> None:
@@ -311,6 +337,247 @@ def один_проход(config: Config, base: Path, session: SessionConfig, sh
         log.close()
 
 
+def _сведения(путь: Path) -> FileInfo | None:
+    try:
+        сведения = путь.stat()
+    except OSError:
+        return None
+    return FileInfo(name=str(путь), modified=сведения.st_mtime, size=сведения.st_size)
+
+
+def старые_журналы(logs_dir: Path, keep_days: float, кроме: Path | None = None) -> list[FileInfo]:
+    файлы = [с for с in map(_сведения, logs_dir.glob("*.log")) if с is not None]
+    if кроме is not None:
+        файлы = [файл for файл in файлы if Path(файл.name) != кроме]
+    return old_logs(файлы, time.time(), keep_days)
+
+
+def убрать_старые_журналы(logs_dir: Path, keep_days: float, кроме: Path | None = None) -> int:
+    """Убрать журналы старше срока. Возвращает, сколько убрано."""
+    убрано = 0
+    for файл in старые_журналы(logs_dir, keep_days, кроме):
+        try:
+            Path(файл.name).unlink()
+            убрано += 1
+        except OSError:
+            pass  # не убрался сейчас — уберётся следующим проходом
+    return убрано
+
+
+def _папки_каналов(base: Path) -> list[Path]:
+    """Папки с роликами: всё в папке архива, кроме служебного."""
+    try:
+        return sorted(
+            папка for папка in base.iterdir()
+            if папка.is_dir() and not папка.name.startswith(("_", "."))
+        )
+    except OSError:
+        return []
+
+
+def обломки(base: Path, скачано: frozenset[str]) -> list[FileInfo]:
+    файлы = []
+    for папка in _папки_каналов(base):
+        try:
+            содержимое = list(папка.iterdir())
+        except OSError:
+            continue
+        for путь in содержимое:
+            if путь.is_file() and is_leftover(путь.name):
+                сведения = _сведения(путь)
+                if сведения is not None:
+                    файлы.append(сведения)
+    return stale_leftovers(файлы, time.time(), скачано)
+
+
+def cmd_clean(args) -> int:
+    """Показать, что можно убрать; убрать — только с --apply."""
+    config, _путь = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    logs_dir = resolve(base, config.paths.logs)
+    archive = resolve(base, config.paths.archive)
+    try:
+        скачано = parse_archive(archive.read_text(encoding="utf-8")).video_ids
+    except OSError:
+        скачано = frozenset()
+
+    журналы = старые_журналы(logs_dir, config.limits.keep_logs_days)
+    лишнее = обломки(base, скачано)
+
+    print(_('журналов старше {} суток: {} ({:.1f} МБ)').format(
+        config.limits.keep_logs_days, len(журналы), total_size(журналы) / 1024**2
+    ))
+    print(_('обломков загрузок, которые уже не пригодятся: {} ({:.1f} МБ)').format(
+        len(лишнее), total_size(лишнее) / 1024**2
+    ))
+    for файл in лишнее:
+        print(f"  {файл.name}")
+
+    if not (журналы or лишнее):
+        print(_("Убирать нечего."))
+        return 0
+    if not args.apply:
+        print()
+        print(_("Ничего не тронуто. Убрать: ytarchive clean --apply"))
+        return 0
+
+    убрано = не_вышло = 0
+    for файл in (*журналы, *лишнее):
+        try:
+            Path(файл.name).unlink()
+            убрано += 1
+        except OSError as ошибка:
+            не_вышло += 1
+            print(_('  не убрался {}: {}').format(файл.name, ошибка))
+    print(_('убрано файлов: {}').format(убрано))
+    return 1 if не_вышло else 0
+
+
+def cmd_verify(args) -> int:
+    """Сверить учёт с диском. Чинит только повторы и только с --apply."""
+    config, _путь = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    archive = resolve(base, config.paths.archive)
+    try:
+        текст = archive.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        текст = ""
+    except OSError as ошибка:
+        print(_('учёт не прочитан: {}').format(ошибка), file=sys.stderr)
+        return 1
+
+    имена = []
+    for папка in _папки_каналов(base):
+        try:
+            имена += [f"{папка.name}/{путь.name}" for путь in папка.iterdir() if путь.is_file()]
+        except OSError as ошибка:
+            print(_('папка {} не прочитана: {}').format(папка, ошибка), file=sys.stderr)
+
+    отчёт = compare(текст, имена)
+    print(_('в учёте строк: {}, роликов на диске: {}').format(отчёт.records, отчёт.files))
+
+    def перечень(заголовок: str, строки: list[str]) -> None:
+        if not строки:
+            return
+        print()
+        print(заголовок.format(len(строки)))
+        for строка in строки[: args.limit]:
+            print(f"  {строка}")
+        if len(строки) > args.limit:
+            print(_('  … и ещё {} (показать все: --limit 0)').format(len(строки) - args.limit))
+
+    if args.limit <= 0:
+        args.limit = 10**9
+    перечень(
+        _("В учёте есть, файла нет — такие ролики заново не скачаются: {}"),
+        [f"https://www.youtube.com/watch?v={ролик}" for ролик in отчёт.missing_files],
+    )
+    перечень(
+        _("Файл есть, в учёте нет — такие ролики скачаются второй раз: {}"),
+        [имя for _ролик, имя in отчёт.unrecorded],
+    )
+    перечень(
+        _("Один ролик в нескольких файлах: {}"),
+        [" + ".join(имена_ролика) for _ролик, имена_ролика in отчёт.twins],
+    )
+    if отчёт.duplicates:
+        print()
+        print(_('Повторных строк в учёте: {} (безвредно)').format(отчёт.extra_lines))
+
+    if отчёт.clean:
+        print(_("Учёт и диск сходятся."))
+        return 0
+
+    if not args.apply:
+        if отчёт.duplicates:
+            print()
+            print(_("Ничего не тронуто. Убрать повторные строки: ytarchive verify --apply"))
+        # Одни повторы — не расхождение: учёт и диск согласны, в файле лишь
+        # лишние строки. Код возврата говорит о том, что требует человека.
+        return 1 if (отчёт.missing_files or отчёт.unrecorded or отчёт.twins) else 0
+
+    if not отчёт.duplicates:
+        print()
+        print(_("Чинить нечего: остальное — решение человека, а не программы."))
+        return 1
+
+    # Учёт дописывает yt-dlp прямо во время выкачки. Перезаписать файл под
+    # ним значит потерять строки, которые он допишет в старый.
+    lock, объяснение = acquire(archive.parent / "ytarchive.lock")
+    if lock is None:
+        print(_('идёт выкачка — учёт сейчас править нельзя ({})').format(объяснение), file=sys.stderr)
+        return 1
+    with lock:
+        копия = archive.with_name(f"{archive.name}.{datetime.now():%Y%m%d-%H%M%S}.bak")
+        try:
+            копия.write_text(текст, encoding="utf-8", newline="\n")
+            archive.write_text(without_duplicates(текст), encoding="utf-8", newline="\n")
+        except OSError as ошибка:
+            print(_('учёт не записан: {}').format(ошибка), file=sys.stderr)
+            return 1
+    print(_('убрано повторных строк: {}; прежний учёт сохранён как {}').format(отчёт.extra_lines, копия.name))
+    return 0
+
+
+def cmd_update(args) -> int:
+    """Обновить yt-dlp тем способом, каким он был поставлен."""
+    import shutil
+    import subprocess
+
+    найден = shutil.which("yt-dlp")
+    команда = update_command(найден, str(Path(sys.executable).parent), sys.executable)
+    if not команда:
+        from runner.preflight import чего_не_хватает
+
+        for нехватка in чего_не_хватает():
+            if нехватка.чего == "yt-dlp":
+                print(f"  {нехватка}")
+        return 1
+
+    # Из окна команда идёт без консоли, а yt-dlp — консольная программа:
+    # без этого флага на каждый его запуск мигало бы чёрное окно.
+    без_окна = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
+    def версия() -> str:
+        try:
+            ответ = subprocess.run(
+                [найден, "--version"], capture_output=True, text=True, errors="replace",
+                timeout=60, **без_окна,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return "?"
+        return ответ.stdout.strip() or "?"
+
+    было = версия()
+    print(_('yt-dlp {} — {}').format(было, найден))
+    print("> " + " ".join(команда), flush=True)
+    try:
+        # Вывод забираем и печатаем сами. Унаследованным он терялся, когда
+        # команду звало окно: там нет консоли, и ответ yt-dlp «я поставлен
+        # через pip, обновляйте им» — самое важное здесь — уходил в никуда.
+        ответ = subprocess.run(
+            list(команда), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", stdin=subprocess.DEVNULL, **без_окна,
+        )
+    except OSError as ошибка:
+        print(str(ошибка), file=sys.stderr)
+        return 1
+    for кусок in (ответ.stdout, ответ.stderr):
+        if кусок.strip():
+            print(кусок.strip())
+    код = ответ.returncode
+    стало = версия()
+    if стало != было:
+        print(_('обновлён: {} → {}').format(было, стало))
+    elif код == 0:
+        print(_('уже последняя версия: {}').format(стало))
+    elif команда[-1] == "-U":
+        # yt-dlp отказался обновлять себя сам — значит, ставили его пакетным
+        # менеджером или pip, и он сам назвал чем. Повторяем это по-человечески.
+        print(_("yt-dlp поставлен не этой программой — обновите его тем же способом, каким ставили."))
+    return код
+
+
 def cmd_run(args) -> int:
     config, _путь = load_config(Path(args.config))
     base = Path(config.paths.base)
@@ -362,6 +629,7 @@ def cmd_daemon(args) -> int:
         проход,
         tools_dir=tools,
         rhythm=config.rhythm,
+        hours=config.hours,
         on_message=скажи,
         passes=args.passes,
     )
@@ -521,6 +789,17 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stop", help=_("попросить работающий экземпляр остановиться")).set_defaults(
         func=cmd_stop
     )
+
+    p_verify = sub.add_parser("verify", help=_("сверить учёт с файлами на диске"))
+    p_verify.add_argument("--apply", action="store_true", help=_("убрать повторные строки учёта"))
+    p_verify.add_argument("--limit", type=int, default=20, help=_("сколько строк каждого перечня показать (0 — все)"))
+    p_verify.set_defaults(func=cmd_verify)
+
+    p_clean = sub.add_parser("clean", help=_("старые журналы и обломки загрузок"))
+    p_clean.add_argument("--apply", action="store_true", help=_("убрать, а не только показать"))
+    p_clean.set_defaults(func=cmd_clean)
+
+    sub.add_parser("update", help=_("обновить yt-dlp")).set_defaults(func=cmd_update)
 
     p_gui = sub.add_parser("gui", help=_("окно наблюдения"))
     p_gui.add_argument("--selftest", action="store_true",

@@ -98,3 +98,14 @@ def build_status(
         archive_count=archive_count,
         stopped_reason=живое.stopped_reason,
     )
+
+
+def is_new_trouble(told: str, current: str) -> bool:
+    """Пора ли сказать человеку о беде всплывающим сообщением.
+
+    Говорим один раз на каждую новую причину. Окно обновляется каждые две
+    секунды, и повторять «истекли куки» с той же частотой значит приучить
+    человека закрывать сообщения не читая. Смена причины — новая беда, и о
+    ней говорим снова.
+    """
+    return bool(current) and current != told

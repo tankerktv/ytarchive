@@ -22,6 +22,7 @@ import pathlib
     "gui/videos.py",
     "gui/source.py",
     "gui/firstrun.py",
+    "gui/upkeep.py",
     "app/main.py",
     "runner/session.py",
     "runner/daemon.py",
