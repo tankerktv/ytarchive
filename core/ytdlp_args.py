@@ -47,6 +47,10 @@ class DownloadSettings:
     #: Потолок скорости, КиБ/с. Ноль — без потолка. Нужен тем, у кого выкачка
     #: делит линию с остальным домом: без него она забирает всё.
     rate_limit: int = 0
+    #: Сохранять комментарии рядом с роликом, в `.info.json`.
+    write_comments: bool = False
+    #: Класть рядом с роликом обложку серии — для медиасерверов.
+    write_thumbnail: bool = False
     extra: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
@@ -62,6 +66,14 @@ class DownloadSettings:
             raise ValueError("предел сетевой операции должен быть положительным")
         if self.rate_limit < 0:
             raise ValueError("потолок скорости не может быть отрицательным")
+
+
+def thumbnail_template(output_template: str) -> str:
+    """Шаблон имени обложки: то же имя, что у ролика, с хвостом `-thumb`."""
+    хвост = ".%(ext)s"
+    if output_template.endswith(хвост):
+        return output_template[: -len(хвост)] + "-thumb" + хвост
+    return output_template + "-thumb"
 
 
 def format_selector(height: int) -> str:
@@ -131,6 +143,20 @@ def build_args(settings: DownloadSettings, url: str) -> list[str]:
 
     if settings.rate_limit:
         args += ["--limit-rate", f"{settings.rate_limit}K"]
+
+    if settings.write_comments:
+        # Комментарии yt-dlp отдаёт только внутри описания ролика целиком,
+        # отдельного файла для них нет.
+        args += ["--write-comments", "--write-info-json"]
+
+    if settings.write_thumbnail:
+        # Имя с хвостом `-thumb` — так обложку серии ищут Kodi и Jellyfin.
+        # Без `--write-thumbnail` картинка после вшивания в файл удаляется.
+        args += [
+            "--write-thumbnail",
+            "--convert-thumbnails", "jpg",
+            "-o", "thumbnail:" + thumbnail_template(settings.output_template),
+        ]
 
     args += list(settings.extra)
     args.append(url)

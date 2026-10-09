@@ -728,4 +728,57 @@
         'libre sur le disque',
     'yt-dlp не получает ролики, только раскадровки — обновите yt-dlp кнопкой в настройках':
         'yt-dlp n’obtient que des storyboards, pas les vidéos — mettez yt-dlp à jour avec le bouton des réglages',
+    # --- библиотека, пропавшие с YouTube, медиасервер ---
+    '{}: в списке канала на YouTube больше нет роликов из архива: {}':
+        '{}: vidéos de l’archive qui ne sont plus dans la liste de la chaîne sur YouTube : {}',
+    'Библиотека':
+        'Bibliothèque',
+    'Все каналы':
+        'Toutes les chaînes',
+    'Готовить для медиасервера (Jellyfin, Kodi, Plex)':
+        'Préparer pour un serveur multimédia (Jellyfin, Kodi, Plex)',
+    'Комментарии ложатся в файл .info.json рядом с роликом. Это сотни лишних запросов на ролик.':
+        'Les commentaires vont dans un fichier .info.json à côté de la vidéo. Cela représente des centaines de requêtes supplémentaires par vidéo.',
+    'Ничего не записано. Записать: ytarchive nfo --apply':
+        'Rien n’a été écrit. Pour écrire : ytarchive nfo --apply',
+    'Описания есть у всего.':
+        'Tout possède déjà son fichier de description.',
+    'Поиск по названию — по всем каналам':
+        'Recherche par titre — dans toutes les chaînes',
+    'Показать в папке':
+        'Afficher dans le dossier',
+    'Размер':
+        'Taille',
+    'Ролики из архива, которых больше нет в списке канала: удалены, скрыты или лежат на другой вкладке канала (Shorts, трансляции).':
+        'Vidéos de l’archive qui ne sont plus dans la liste de la chaîne : supprimées, masquées ou placées dans un autre onglet (Shorts, directs).',
+    'Рядом с роликом кладутся обложка и файл .nfo: сервер показывает канал сериалом. Для уже скачанного — команда ytarchive nfo --apply.':
+        'Une vignette et un fichier .nfo sont placés à côté de chaque vidéo : le serveur présente la chaîne comme une série. Pour ce qui est déjà téléchargé : ytarchive nfo --apply.',
+    'Смотреть':
+        'Regarder',
+    'Сохранять комментарии (заметно дольше)':
+        'Enregistrer les commentaires (nettement plus lent)',
+    'Существующие описания не трогаются. На большом архиве это минуты: из каждого ролика читается его описание.':
+        'Les fichiers de description existants ne sont pas modifiés. Sur une grande archive cela prend des minutes : la description est lue dans chaque vidéo.',
+    'Только те, которых нет на YouTube':
+        'Seulement celles qui ne sont plus sur YouTube',
+    'дописано описаний для медиасервера: {}':
+        'fichiers de description ajoutés pour le serveur multimédia : {}',
+    'записано описаний: {}':
+        'fichiers de description écrits : {}',
+    'записать, а не только посчитать':
+        'écrire, pas seulement compter',
+    'из них нет на YouTube: {}':
+        'dont absentes de YouTube : {}',
+    'не записалось: {}':
+        'non écrits : {}',
+    'нет в списке канала':
+        'absente de la liste de la chaîne',
+    'описание ролика':
+        'description de la vidéo',
+    'описания для медиасервера':
+        'fichiers de description pour un serveur multimédia',
+    'показано {} из {}':
+        '{} affichées sur {}',
+    'роликов без описания: {}; каналов без описания: {}':
+        'vidéos sans fichier de description : {} ; chaînes sans : {}',
 }

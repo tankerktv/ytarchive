@@ -33,6 +33,7 @@ from core.ytdlp_args import (
     build_probe_args,
     output_template_for,
 )
+from runner.library import ids_on_disk, mark_gone
 from runner.process import run_watched
 from runner.language import _
 
@@ -160,6 +161,20 @@ def download_channel(
     if перепись.unreadable and on_message is not None:
         on_message(
             _('{}: непонятых строк в переписи {}').format(channel.name, len(перепись.unreadable))
+        )
+
+    # Перепись уже на руках — заодно узнаём, чего с диска на YouTube больше нет.
+    пропало = mark_gone(
+        archive_path.parent,
+        channel.name,
+        ids_on_disk(config.base_dir / channel.name),
+        frozenset(v.video_id for v in перепись.videos),
+    )
+    if пропало and on_message is not None:
+        on_message(
+            _('{}: в списке канала на YouTube больше нет роликов из архива: {}').format(
+                channel.name, len(пропало)
+            )
         )
 
     новые = [v for v in перепись.videos if v.video_id not in было]

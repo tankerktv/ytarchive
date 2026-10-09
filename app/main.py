@@ -13,6 +13,7 @@
     ytarchive verify          сверить учёт с файлами на диске
     ytarchive clean           показать, что из старого можно убрать
     ytarchive update          обновить yt-dlp
+    ytarchive nfo             описания для медиасервера (Jellyfin, Kodi, Plex)
     ytarchive gui             окно наблюдения
 """
 
@@ -93,6 +94,8 @@ def build_session(config: Config, base: Path) -> SessionConfig:
         cookies_file=str(cookies) if (cookies.exists() and not config.cookies_browser) else None,
         cookies_browser=config.cookies_browser or None,
         rate_limit=config.rate_limit,
+        write_comments=config.write_comments,
+        write_thumbnail=config.media_server,
         height=config.height,
         prefer_av1=config.prefer_av1,
         write_subs=config.write_subs,
@@ -323,6 +326,14 @@ def один_проход(config: Config, base: Path, session: SessionConfig, sh
                 should_stop=should_stop,
             )
             скажи(итог.describe(_))
+            if config.media_server and not (should_stop is not None and should_stop()):
+                # Описания дописываются под тем же замком: иначе их писали бы
+                # сразу и проход, и команда `nfo`, запущенная рядом.
+                from runner.library import write_nfo
+
+                записано, _не_вышло = write_nfo(base, should_stop=should_stop)
+                if записано:
+                    скажи(_('дописано описаний для медиасервера: {}').format(записано))
             # Причину остановки и счёт отказов ОСТАВЛЯЕМ: проход кончился,
             # но человеку надо увидеть, почему он кончился так. Обнули мы их —
             # окно показало бы бодрое «не запущена» вместо «истекли куки».
@@ -517,6 +528,34 @@ def cmd_verify(args) -> int:
             return 1
     print(_('убрано повторных строк: {}; прежний учёт сохранён как {}').format(отчёт.extra_lines, копия.name))
     return 0
+
+
+def cmd_nfo(args) -> int:
+    """Описания для медиасервера: показать, чего не хватает; записать — с --apply."""
+    from runner.library import nfo_todo, write_nfo
+
+    config, _путь = load_config(Path(args.config))
+    base = Path(config.paths.base)
+    роликам, каналам = nfo_todo(base)
+    print(_('роликов без описания: {}; каналов без описания: {}').format(len(роликам), len(каналам)))
+    if not (роликам or каналам):
+        print(_("Описания есть у всего."))
+        return 0
+    if not args.apply:
+        print()
+        print(_("Ничего не записано. Записать: ytarchive nfo --apply"))
+        print(_("Существующие описания не трогаются. На большом архиве это минуты: из каждого ролика читается его описание."))
+        return 0
+
+    def ход(номер: int, всего: int) -> None:
+        if номер == 1 or номер % 50 == 0 or номер == всего:
+            print(f"  {номер} / {всего}", flush=True)
+
+    записано, не_вышло = write_nfo(base, on_progress=ход)
+    print(_('записано описаний: {}').format(записано))
+    if не_вышло:
+        print(_('не записалось: {}').format(не_вышло))
+    return 1 if не_вышло else 0
 
 
 def cmd_update(args) -> int:
@@ -800,6 +839,10 @@ def main(argv: list[str] | None = None) -> int:
     p_clean.set_defaults(func=cmd_clean)
 
     sub.add_parser("update", help=_("обновить yt-dlp")).set_defaults(func=cmd_update)
+
+    p_nfo = sub.add_parser("nfo", help=_("описания для медиасервера"))
+    p_nfo.add_argument("--apply", action="store_true", help=_("записать, а не только посчитать"))
+    p_nfo.set_defaults(func=cmd_nfo)
 
     p_gui = sub.add_parser("gui", help=_("окно наблюдения"))
     p_gui.add_argument("--selftest", action="store_true",

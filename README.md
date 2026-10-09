@@ -39,6 +39,12 @@ all the memory. Most of the decisions below come from that.
 * **Cookies from the browser** instead of a file exported by hand.
 * **Looks after itself**: removes old logs, shows useless download leftovers,
   checks its record against the files on disk and updates yt-dlp.
+* **A library**: everything downloaded, across all channels — searchable,
+  sortable by date and size, with the description and one-click playback.
+* **Knows what is gone from YouTube.** A video in the archive that has
+  disappeared from its channel’s list is marked; that is what an archive is for.
+* **Prepares the archive for a media server**: `.nfo` files that make
+  Jellyfin, Kodi and Plex show a channel as a series.
 * **Estimates disk space up front.** `plan` shows what a channel will take
   before anything is downloaded.
 
@@ -82,6 +88,7 @@ python ytarchive.py stop      # ask the running copy to stop
 python ytarchive.py verify    # check the record against the files on disk
 python ytarchive.py clean     # show what old files can be removed
 python ytarchive.py update    # update yt-dlp
+python ytarchive.py nfo       # description files for a media server
 python ytarchive.py gui       # the window
 ```
 
@@ -171,7 +178,10 @@ but expectation is not verification.
 
 The installer has been run on Windows and Debian; its macOS steps are untested.
 
-Known limits: the trouble notification comes from the tray icon, so a
+Known limits: the `.nfo` files follow Kodi’s conventions and have not been
+tried against a live media server. “Not in the channel’s list” means exactly
+that, not “deleted”: a video sitting on another tab of the channel (Shorts,
+live streams) is marked the same way. The trouble notification comes from the tray icon, so a
 downloader started without the window can only write to the log. yt-dlp is
 updated by the program only when the program installed it; a copy installed
 some other way is asked to update itself, and its answer is shown as is.

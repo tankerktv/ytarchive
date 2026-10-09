@@ -184,13 +184,10 @@ class Window(QMainWindow):
         # В заголовке и на панели задач — фирменный цвет: он не меняется,
         # и по нему окно находят среди прочих. Цвет состояния — только в трее.
         self.setWindowIcon(значок())
-        self.resize(980, 720)
+        self.resize(1080, 760)
 
-        self.вкладки = QTabWidget()
-        self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
-        self.вкладки.addTab(self._вкладка_каналы(), _("Каналы"))
-        self.вкладки.addTab(self._вкладка_настройки(), _("Настройки"))
-        self.setCentralWidget(self.вкладки)
+        self.библиотека = None
+        self._собрать_вкладки()
 
         self._последний_журнал = ""
         self._предупредили_о_трее = False
@@ -208,6 +205,21 @@ class Window(QMainWindow):
         self.таймер.timeout.connect(self.обновить)
         self.таймер.start(REFRESH_MS)
         self.обновить()
+
+    def _собрать_вкладки(self) -> None:
+        """Построить вкладки. Одно место на первую сборку и на пересборку:
+        список вкладок, заданный дважды, однажды разойдётся."""
+        from gui.library import ВкладкаБиблиотека
+
+        self.вкладки = QTabWidget()
+        self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
+        self._вкладка_каналов = self._вкладка_каналы()
+        self.вкладки.addTab(self._вкладка_каналов, _("Каналы"))
+        self.библиотека = ВкладкаБиблиотека(self.source, фоновые=self._фоновые)
+        self.вкладки.addTab(self.библиотека, _("Библиотека"))
+        self._вкладка_настроек = self._вкладка_настройки()
+        self.вкладки.addTab(self._вкладка_настроек, _("Настройки"))
+        self.setCentralWidget(self.вкладки)
 
     # --- вкладка «Обзор» ----------------------------------------------------
 
@@ -323,10 +335,10 @@ class Window(QMainWindow):
     def _по_подсказке(self) -> None:
         """Отвести человека туда, где подсказка исполняется."""
         if self._подсказка is Hint.NO_CHANNELS:
-            self.вкладки.setCurrentIndex(1)
+            self.вкладки.setCurrentWidget(self._вкладка_каналов)
             self.поле_поиска.setFocus()
         elif self._подсказка is Hint.NO_COOKIES:
-            self.вкладки.setCurrentIndex(2)
+            self.вкладки.setCurrentWidget(self._вкладка_настроек)
             self.поле_куки.setFocus()
 
     # --- вкладка «Каналы» ---------------------------------------------------
@@ -792,6 +804,18 @@ class Window(QMainWindow):
         форма.addRow(_("Качество:"), self.поле_качество)
         форма.addRow("", self.поле_av1)
         форма.addRow("", self.поле_субтитры)
+        self.поле_комментарии = QCheckBox(_("Сохранять комментарии (заметно дольше)"))
+        self.поле_комментарии.setToolTip(
+            _("Комментарии ложатся в файл .info.json рядом с роликом. Это сотни "
+              "лишних запросов на ролик.")
+        )
+        self.поле_медиасервер = QCheckBox(_("Готовить для медиасервера (Jellyfin, Kodi, Plex)"))
+        self.поле_медиасервер.setToolTip(
+            _("Рядом с роликом кладутся обложка и файл .nfo: сервер показывает канал "
+              "сериалом. Для уже скачанного — команда ytarchive nfo --apply.")
+        )
+        форма.addRow("", self.поле_комментарии)
+        форма.addRow("", self.поле_медиасервер)
         форма.addRow(_("Куки YouTube:"), self.поле_куки)
 
         # --- сеть и расписание ---
@@ -950,6 +974,8 @@ class Window(QMainWindow):
         self.поле_качество.setCurrentIndex(ALLOWED_HEIGHTS.index(config.height))
         self.поле_av1.setChecked(config.prefer_av1)
         self.поле_субтитры.setChecked(config.write_subs)
+        self.поле_комментарии.setChecked(config.write_comments)
+        self.поле_медиасервер.setChecked(config.media_server)
         self.поле_молчание.setValue(int(config.limits.silence_limit))
         self.поле_пауза_мин.setValue(config.limits.sleep_min)
         self.поле_пауза_макс.setValue(config.limits.sleep_max)
@@ -986,6 +1012,8 @@ class Window(QMainWindow):
             height=self.поле_качество.currentData(),
             prefer_av1=self.поле_av1.isChecked(),
             write_subs=self.поле_субтитры.isChecked(),
+            write_comments=self.поле_комментарии.isChecked(),
+            media_server=self.поле_медиасервер.isChecked(),
             limits=пределы,
             cookies_browser=self.поле_куки.currentData(),
             rate_limit=self.поле_скорость.value(),
@@ -1077,11 +1105,11 @@ class Window(QMainWindow):
         self.setWindowTitle(_("Архив YouTube"))
         прежние = self.centralWidget()
 
-        self.вкладки = QTabWidget()
-        self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
-        self.вкладки.addTab(self._вкладка_каналы(), _("Каналы"))
-        self.вкладки.addTab(self._вкладка_настройки(), _("Настройки"))
-        self.setCentralWidget(self.вкладки)
+        # Прежняя библиотека держит поток с миниатюрами: его надо отпустить
+        # до того, как её дерево будет удалено.
+        if self.библиотека is not None:
+            self.библиотека.дождаться_потоков()
+        self._собрать_вкладки()
 
         # Прежнее дерево приходится убирать руками: сам по себе setCentralWidget
         # его не удаляет, а оставляет ребёнком окна. Проверено — после смены
@@ -1113,6 +1141,8 @@ class Window(QMainWindow):
             _отпустить(поток)
         self._поиск = None
         self._логотипы = None
+        if self.библиотека is not None:
+            self.библиотека.дождаться_потоков()
         # Потоки, отпущенные закрытым окном роликов, тоже наши: при выходе
         # разрушается всё, и живой поток снова обрубил бы концы.
         дождаться_доживающих()
@@ -1384,8 +1414,23 @@ def _проверить_окно_роликов(source: ArchiveSource) -> None:
     окно._дождаться_потоков()
     окно.deleteLater()
 
+    from core.library import Item
     from core.rules import Rules
+    from gui.library import ВкладкаБиблиотека
     from gui.upkeep import ОкноКоманды, ОкноПравил
+
+    библиотека = ВкладкаБиблиотека(source, фоновые=False)
+    библиотека._записи = [
+        Item("aaaaaaaaaaa", "Первый", "Канал", "Канал/2024-01-01 - Первый [aaaaaaaaaaa].mkv",
+             "20240101", 5 * 1024**3, gone=True),
+        Item("bbbbbbbbbbb", "Второй", "Канал", "Канал/2025-01-01 - Второй [bbbbbbbbbbb].mkv",
+             "20250101", 300 * 1024**2),
+    ]
+    библиотека._заполнить()
+    библиотека.поиск.setText("втор")
+    библиотека.только_пропавшие.setChecked(True)
+    библиотека.дождаться_потоков()
+    библиотека.deleteLater()
 
     правила = ОкноПравил("проверка", Rules(min_seconds=60, after="20240101"))
     assert правила.собрать() == Rules(min_seconds=60, after="20240101")

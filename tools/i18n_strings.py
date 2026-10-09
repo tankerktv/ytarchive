@@ -23,6 +23,7 @@ import pathlib
     "gui/source.py",
     "gui/firstrun.py",
     "gui/upkeep.py",
+    "gui/library.py",
     "app/main.py",
     "runner/session.py",
     "runner/daemon.py",

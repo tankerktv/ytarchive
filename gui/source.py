@@ -173,6 +173,30 @@ class ArchiveSource:
         ответ = self.write_channels(format_channels(стало))
         return _('{}: добавлен «{}»').format(ответ, name) if ответ.ok else ответ.text
 
+    def library(self, fresh: bool = False) -> list:
+        """Скачанное по всем каналам — для вкладки «Библиотека».
+
+        Сохраняется так же, как счёт файлов: обход двух тысяч имён на каждое
+        нажатие клавиши в поиске был бы заметен.
+        """
+        from core.status import is_fresh
+        from runner.library import GONE_FILE, library
+
+        ключ = [self._ключ_архива()]
+        try:
+            ключ.append((self.tools_dir / GONE_FILE).stat().st_mtime_ns)
+        except OSError:
+            ключ.append(None)
+        ключ = tuple(ключ)
+        сохранённое = getattr(self, "_библиотека", None)
+        if not fresh and сохранённое is not None:
+            когда, прежний_ключ, значение = сохранённое
+            if is_fresh(saved_at=когда, saved_key=прежний_ключ, now=time.time(), key=ключ, ttl=STATS_TTL):
+                return значение
+        значение = library(self.base, self.tools_dir)
+        self._библиотека = (time.time(), ключ, значение)
+        return значение
+
     def has_cookies(self) -> bool:
         """Есть ли откуда взять вход в YouTube: файл на месте или выбран браузер.
 

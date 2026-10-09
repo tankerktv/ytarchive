@@ -37,7 +37,7 @@ KNOWN_SCHEDULE = {"pause_idle", "pause_busy", "pause_trouble", "hours"}
 KNOWN_PATHS = {"base", "channels", "archive", "cookies", "logs", "excluded"}
 KNOWN_DOWNLOAD = {
     "height", "prefer_av1", "write_subs", "sub_langs", "break_on_existing",
-    "cookies_browser", "rate_limit",
+    "cookies_browser", "rate_limit", "write_comments", "media_server",
 }
 KNOWN_LIMITS = {
     "silence_limit", "sleep_min", "sleep_max", "sleep_requests", "socket_timeout",
@@ -97,6 +97,12 @@ class Config:
     cookies_browser: str = ""
     #: Потолок скорости, КиБ/с. Ноль — без потолка.
     rate_limit: int = 0
+    #: Сохранять комментарии. Они ложатся в файл `.info.json` рядом с роликом.
+    #: По умолчанию выключено: это сотни лишних запросов на ролик.
+    write_comments: bool = False
+    #: Готовить архив для медиасервера: обложка серии рядом с роликом и
+    #: файлы .nfo, по которым Jellyfin, Kodi и Plex показывают канал сериалом.
+    media_server: bool = False
     #: Часы, когда качать можно. None — всегда.
     hours: Hours | None = None
     #: Язык интерфейса. «system» значит «спросить у системы» — так и стоит
@@ -231,6 +237,8 @@ def parse_config(data: dict) -> Config:
         hours=hours,
         cookies_browser=cookies_browser,
         rate_limit=rate_limit,
+        write_comments=bool(raw_download.get("write_comments", False)),
+        media_server=bool(raw_download.get("media_server", False)),
         language=language,
         height=height,
         prefer_av1=bool(raw_download.get("prefer_av1", True)),
@@ -287,6 +295,12 @@ break_on_existing = {str(config.break_on_existing).lower()}
 cookies_browser = {_toml_str(config.cookies_browser)}
 # Потолок скорости, КиБ/с. 0 — без потолка.
 rate_limit = {config.rate_limit}
+# Сохранять комментарии — в файл .info.json рядом с роликом. Это сотни
+# лишних запросов на ролик: выкачка идёт заметно дольше.
+write_comments = {str(config.write_comments).lower()}
+# Готовить архив для медиасервера (Jellyfin, Kodi, Plex): обложка серии
+# рядом с роликом и файлы .nfo. Для уже скачанного: ytarchive nfo --apply
+media_server = {str(config.media_server).lower()}
 
 [limits]
 # Молчание дольше этого считается зависанием. Должно быть заметно больше
@@ -356,6 +370,12 @@ break_on_existing = false
 cookies_browser = ""
 # Потолок скорости, КиБ/с. 0 — без потолка.
 rate_limit = 0
+# Сохранять комментарии — в файл .info.json рядом с роликом. Это сотни
+# лишних запросов на ролик: выкачка идёт заметно дольше.
+write_comments = false
+# Готовить архив для медиасервера (Jellyfin, Kodi, Plex): обложка серии
+# рядом с роликом и файлы .nfo. Для уже скачанного: ytarchive nfo --apply
+media_server = false
 
 [limits]
 # Молчание дольше этого считается зависанием. Должно быть заметно больше
