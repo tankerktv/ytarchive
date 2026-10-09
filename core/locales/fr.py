@@ -23,8 +23,6 @@
         'Démarrer',
     'Остановить':
         'Arrêter',
-    'Обновить':
-        'Rafraîchir',
     'Запустить выкачку':
         'Démarrer le téléchargement',
     'Остановить выкачку':
@@ -47,8 +45,6 @@
         '{} : vidéo {} sur {}',
     'осталось {}':
         '{} restantes',
-    'Сколько уже лежит в архиве по каждому каналу:':
-        'Ce qui est déjà archivé, par chaîne :',
     'Канал':
         'Chaîne',
     'Файлов':
@@ -239,8 +235,6 @@
         '{:.1f} Mo/s',
     '{:.1f} ГБ':
         '{:.1f} Go',
-    '{:.2f} ГБ':
-        '{:.2f} Go',
     'Язык:':
         'Langue :',
     'Системный язык — {}':
@@ -621,8 +615,6 @@
         'Supprimer ce qui est affiché',
     'Убрать старое…':
         'Supprimer l’ancien…',
-    'Уход за архивом:':
-        'Entretien de l’archive :',
     'Учёт и диск сходятся.':
         'Le registre et le disque concordent.',
     'Файл есть, в учёте нет — такие ролики скачаются второй раз: {}':
@@ -689,4 +681,49 @@
         'registre non écrit : {}',
     'учёт не прочитан: {}':
         'registre illisible : {}',
+    # --- новый вид окна ---
+    'YouTube не отдаёт ролики без входа в аккаунт. Выберите в настройках браузер, в котором вы вошли в YouTube, или положите файл cookies.txt.':
+        'YouTube ne fournit pas les vidéos sans connexion. Choisissez dans les réglages le navigateur où vous êtes connecté à YouTube, ou déposez un fichier cookies.txt.',
+    '{:.2f} ТБ':
+        '{:.2f} To',
+    'Архив':
+        'Archive',
+    'В папке архива лежат ролики в папках, которых нет в списке: {}. Так выглядит канал, переименованный в файле руками.':
+        'Le dossier d’archive contient des vidéos dans des dossiers absents de la liste : {}. C’est l’aspect d’une chaîne renommée à la main dans le fichier.',
+    'Дата':
+        'Date',
+    'Дата примерная: YouTube в списке канала пишет «3 года назад». Точная появится, когда ролик будет скачан.':
+        'La date est approximative : dans la liste d’une chaîne, YouTube indique « il y a 3 ans ». La date exacte apparaît une fois la vidéo téléchargée.',
+    'Добавить канал':
+        'Ajouter une chaîne',
+    'Журнал':
+        'Journal',
+    'Каналов пока нет. Добавьте первый — программа покажет, сколько в нём роликов и хватит ли места, ещё до того, как начнёт качать.':
+        'Aucune chaîne pour l’instant. Ajoutez la première — le programme indique combien de vidéos elle contient et s’il y a la place, avant de télécharger quoi que ce soit.',
+    'Мои каналы':
+        'Mes chaînes',
+    'Осторожность':
+        'Prudence',
+    'Открыть настройки':
+        'Ouvrir les réglages',
+    'Показать':
+        'Afficher',
+    'Сеть и расписание':
+        'Réseau et horaires',
+    'Скрыть':
+        'Masquer',
+    'Уход за архивом':
+        'Entretien de l’archive',
+    'Что качать':
+        'Quoi télécharger',
+    'ждёт следующего прохода':
+        'en attente du prochain passage',
+    'каналов в списке':
+        'chaînes dans la liste',
+    'объём архива':
+        'taille de l’archive',
+    'роликов в архиве':
+        'vidéos dans l’archive',
+    'свободно на диске':
+        'libre sur le disque',
 }

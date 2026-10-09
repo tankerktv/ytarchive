@@ -61,6 +61,9 @@ class ПоддельныйИсточник:
     def listing(self, channel_name, should_stop=None):
         return ПЕРЕПИСЬ
 
+    def file_dates(self, channel_name):
+        return {"aaaaaaaaaaa": "20240411"}
+
 
 @pytest.fixture(scope="module")
 def приложение():
@@ -125,7 +128,7 @@ def test_снятое_ранее_показано_снятым(приложен�
     двери._перепись_готова(ПЕРЕПИСЬ)
 
     assert двери.таблица.item(1, 0).checkState() == Qt.CheckState.Unchecked
-    assert двери.таблица.item(1, 4).text() == "снят"
+    assert двери.таблица.item(1, 5).text() == "снят"
     двери._дождаться_потоков()
 
 
@@ -135,7 +138,7 @@ def test_скачанное_видно_в_списке(приложение, tmp
     двери = ОкноРоликов(источник, "канал", фоновые=False)
     двери._перепись_готова(ПЕРЕПИСЬ)
 
-    assert двери.таблица.item(0, 4).text() == "скачан"
+    assert двери.таблица.item(0, 5).text() == "скачан"
     двери._дождаться_потоков()
 
 
@@ -160,6 +163,7 @@ def test_скачанное_видно_в_списке(приложение, tmp
         def archive_text(self): return ''
         def exclusions(self): return Exclusions()
         def write_exclusions(self, ids): return 'выбор сохранён'
+        def file_dates(self, name): return {}
         def listing(self, name, should_stop=None):
             # Глухой не слышит просьбы прекратить — как urlopen с таймаутом.
             for _ in range(40):

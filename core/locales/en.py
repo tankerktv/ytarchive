@@ -15,7 +15,6 @@
     # --- обзор ---
     "Запустить": "Start",
     "Остановить": "Stop",
-    "Обновить": "Refresh",
     "Запустить выкачку": "Start downloading",
     "Остановить выкачку": "Stop downloading",
     "обход работает": "worker running",
@@ -29,8 +28,6 @@
     "{}: ролик {} из {}": "{}: video {} of {}",
     "осталось {}": "{} left",
     # --- каналы ---
-    "Сколько уже лежит в архиве по каждому каналу:":
-        "How much is already archived per channel:",
     "Канал": "Channel",
     "Файлов": "Files",
     "Объём": "Size",
@@ -167,7 +164,6 @@
     "{:.0f} МБ": "{:.0f} MB",
     "{:.1f} МБ/с": "{:.1f} MB/s",
     "{:.1f} ГБ": "{:.1f} GB",
-    "{:.2f} ГБ": "{:.2f} GB",
     'Язык:':
         'Language:',
     'Системный язык — {}':
@@ -548,8 +544,6 @@
         'Remove what is shown',
     'Убрать старое…':
         'Remove old files…',
-    'Уход за архивом:':
-        'Archive upkeep:',
     'Учёт и диск сходятся.':
         'The record and the disk agree.',
     'Файл есть, в учёте нет — такие ролики скачаются второй раз: {}':
@@ -616,4 +610,49 @@
         'the record was not written: {}',
     'учёт не прочитан: {}':
         'the record could not be read: {}',
+    # --- новый вид окна ---
+    'YouTube не отдаёт ролики без входа в аккаунт. Выберите в настройках браузер, в котором вы вошли в YouTube, или положите файл cookies.txt.':
+        'YouTube does not serve videos unless you are signed in. In the settings, choose the browser where you are signed in to YouTube, or provide a cookies.txt file.',
+    '{:.2f} ТБ':
+        '{:.2f} TB',
+    'Архив':
+        'Archive',
+    'В папке архива лежат ролики в папках, которых нет в списке: {}. Так выглядит канал, переименованный в файле руками.':
+        'The archive folder holds videos in folders that are not in the list: {}. This is what a channel renamed by hand in the file looks like.',
+    'Дата':
+        'Date',
+    'Дата примерная: YouTube в списке канала пишет «3 года назад». Точная появится, когда ролик будет скачан.':
+        'The date is approximate: in a channel listing YouTube says “3 years ago”. The exact one appears once the video is downloaded.',
+    'Добавить канал':
+        'Add a channel',
+    'Журнал':
+        'Log',
+    'Каналов пока нет. Добавьте первый — программа покажет, сколько в нём роликов и хватит ли места, ещё до того, как начнёт качать.':
+        'No channels yet. Add the first one — the program shows how many videos it has and whether there is room for them before it downloads anything.',
+    'Мои каналы':
+        'My channels',
+    'Осторожность':
+        'Caution',
+    'Открыть настройки':
+        'Open settings',
+    'Показать':
+        'Show',
+    'Сеть и расписание':
+        'Network and schedule',
+    'Скрыть':
+        'Hide',
+    'Уход за архивом':
+        'Archive upkeep',
+    'Что качать':
+        'What to download',
+    'ждёт следующего прохода':
+        'waiting for the next pass',
+    'каналов в списке':
+        'channels in the list',
+    'объём архива':
+        'archive size',
+    'роликов в архиве':
+        'videos in the archive',
+    'свободно на диске':
+        'free on disk',
 }

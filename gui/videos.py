@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -31,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from core.archive import parse_archive
 from core.exclusions import merge
-from core.videos import Listing, search
+from core.videos import ПРИМЕРНО, Listing, date_text, search
 from runner.language import _
 
 #: Размер миниатюры в списке. mqdefault — 320×180, показываем меньше:
@@ -42,7 +43,13 @@ from runner.language import _
 def столбцы() -> list[str]:
     """Заголовки таблицы. Функция, а не константа: константу пришлось бы
     вычислить при импорте, то есть до того, как выбран язык."""
-    return ["", "", _("Название"), _("Длительность"), _("Состояние")]
+    return ["", "", _("Название"), _("Длительность"), _("Дата"), _("Состояние")]
+
+
+#: Номера столбцов. Именами, а не числами по коду: добавление «Даты»
+#: сдвинуло «Состояние», и число 4 в трёх местах стало бы тихой ошибкой.
+СТОЛБЕЦ_ДАТА = 4
+СТОЛБЕЦ_СОСТОЯНИЕ = 5
 
 #: Сколько ждём поток при закрытии. Больше — и закрытие окна начнёт
 #: подвисать на глазах; меньше — не хватит даже на то, чтобы снять yt-dlp.
@@ -199,9 +206,14 @@ class ОкноРоликов(QDialog):
         self.таблица.setHorizontalHeaderLabels(столбцы())
         self.таблица.setColumnWidth(0, 34)
         self.таблица.setColumnWidth(1, 110)
-        self.таблица.setColumnWidth(2, 460)
         self.таблица.setColumnWidth(3, 110)
-        self.таблица.horizontalHeader().setStretchLastSection(True)
+        self.таблица.setColumnWidth(СТОЛБЕЦ_ДАТА, 110)
+        self.таблица.setColumnWidth(СТОЛБЕЦ_СОСТОЯНИЕ, 110)
+        # Тянется название, а не последний столбец: оно одно бывает длинным.
+        # Раньше «Состояние» уезжало за край, и к нему приходилось прокручивать.
+        self.таблица.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.таблица.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.таблица.setShowGrid(False)
         self.таблица.verticalHeader().setVisible(False)
         self.таблица.setIconSize(МИНИАТЮРА)
         self.таблица.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -213,7 +225,7 @@ class ОкноРоликов(QDialog):
 
         нижний = QHBoxLayout()
         self.счётчик = QLabel("")
-        self.счётчик.setStyleSheet("color: #666;")
+        self.счётчик.setProperty("role", "muted")
         нижний.addWidget(self.счётчик, 1)
         self.кнопка_сохранить = QPushButton(_("Сохранить выбор"))
         self.кнопка_закрыть = QPushButton(_("Закрыть"))
@@ -235,6 +247,8 @@ class ОкноРоликов(QDialog):
         # только перепись, и только она уходит в поток.
         self._скачанные = parse_archive(self.source.archive_text()).video_ids
         self._снятые = set(self.source.exclusions().video_ids)
+        #: Точные даты — из имён скачанных файлов; у остальных дата примерная.
+        self._точные_даты: dict[str, str] = self.source.file_dates(канал)
 
         if фоновые:
             self._читать()
@@ -259,7 +273,7 @@ class ОкноРоликов(QDialog):
         столбец.addWidget(self.название)
 
         self.подпись = QLabel("")
-        self.подпись.setStyleSheet("color: #666;")
+        self.подпись.setProperty("role", "muted")
         self.подпись.setWordWrap(True)
         столбец.addWidget(self.подпись)
 
@@ -288,7 +302,8 @@ class ОкноРоликов(QDialog):
 
         self.название.setText(ролик.title)
         состояние = self._состояние(ролик)
-        self.подпись.setText(f"{ролик.duration_text()} · {состояние} · {ролик.video_id}")
+        части = [ролик.duration_text(), self._дата(ролик), состояние, ролик.video_id]
+        self.подпись.setText(" · ".join(часть for часть in части if часть != "—"))
         self.кнопка_открыть.setEnabled(True)
 
         путь = cached_image(self.source.thumbs_dir, ролик.video_id)
@@ -359,6 +374,14 @@ class ОкноРоликов(QDialog):
 
     # --- список -------------------------------------------------------------
 
+    def _дата(self, ролик) -> str:
+        from datetime import date
+
+        точная = self._точные_даты.get(ролик.video_id)
+        if точная:
+            return date_text(точная, exact=True)
+        return date_text(ролик.upload_date, exact=False, today=f"{date.today():%Y%m%d}")
+
     def _состояние(self, ролик) -> str:
         if ролик.video_id in self._скачанные:
             return _("скачан")
@@ -399,7 +422,16 @@ class ОкноРоликов(QDialog):
 
                 self.таблица.setItem(строка, 2, QTableWidgetItem(ролик.title))
                 self.таблица.setItem(строка, 3, QTableWidgetItem(ролик.duration_text()))
-                self.таблица.setItem(строка, 4, QTableWidgetItem(self._состояние(ролик)))
+                дата = QTableWidgetItem(self._дата(ролик))
+                if дата.text().startswith(ПРИМЕРНО):
+                    дата.setToolTip(
+                        _("Дата примерная: YouTube в списке канала пишет «3 года назад». "
+                          "Точная появится, когда ролик будет скачан.")
+                    )
+                self.таблица.setItem(строка, СТОЛБЕЦ_ДАТА, дата)
+                self.таблица.setItem(
+                    строка, СТОЛБЕЦ_СОСТОЯНИЕ, QTableWidgetItem(self._состояние(ролик))
+                )
                 self.таблица.setRowHeight(строка, 60)
         finally:
             self._рисуем = False
@@ -428,7 +460,7 @@ class ОкноРоликов(QDialog):
             self._снятые.add(идентификатор)
 
         строка = item.row()
-        состояние = self.таблица.item(строка, 4)
+        состояние = self.таблица.item(строка, СТОЛБЕЦ_СОСТОЯНИЕ)
         if состояние is not None and 0 <= строка < len(self._видимые):
             состояние.setText(self._состояние(self._видимые[строка]))
         self._обновить_счётчик()

@@ -169,6 +169,43 @@ class ArchiveSource:
         ответ = self.write_channels(format_channels(стало))
         return _('{}: добавлен «{}»').format(ответ, name) if ответ.ok else ответ.text
 
+    def has_cookies(self) -> bool:
+        """Есть ли откуда взять вход в YouTube: файл на месте или выбран браузер.
+
+        Читаем настройки заново, а не помним с запуска: человек кладёт файл,
+        глядя на подсказку, и она должна исчезнуть сама. Не смогли понять —
+        считаем, что есть: ложная подсказка хуже отсутствующей.
+        """
+        from core.config import loads, parse_config
+
+        try:
+            config = parse_config(loads(self.config_text()))
+        except Exception:  # noqa: BLE001 — о битых настройках скажет вкладка настроек
+            return True
+        if config.cookies_browser:
+            return True
+        путь = Path(config.paths.cookies)
+        return (путь if путь.is_absolute() else Path(config.paths.base) / путь).exists()
+
+    def file_dates(self, channel_name: str) -> dict[str, str]:
+        """Точные даты скачанных роликов канала: идентификатор → ГГГГММДД.
+
+        Берутся из имён файлов — туда их пишет yt-dlp при загрузке. Перепись
+        отдаёт дату лишь примерно, а здесь она настоящая.
+        """
+        from core.videos import date_from_filename
+
+        итог: dict[str, str] = {}
+        try:
+            имена = [путь.name for путь in (self.base / channel_name).iterdir()]
+        except OSError:
+            return итог  # папки ещё нет — канал ни разу не качался
+        for имя in имена:
+            найдено = date_from_filename(имя)
+            if найдено is not None:
+                итог.setdefault(*найдено)
+        return итог
+
     def set_rules(self, index: int, rules) -> Записано:
         """Задать каналу правила отбора."""
         from core.channels import format_channels, parse_channels, set_rules

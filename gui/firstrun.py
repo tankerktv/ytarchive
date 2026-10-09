@@ -92,7 +92,7 @@ class ОкноПервогоЗапуска(QDialog):
             "Выберите папку на диске, где есть запас."
         ))
         пояснение.setWordWrap(True)
-        пояснение.setStyleSheet("color: #666;")
+        пояснение.setStyleSheet("color: #8b949e;")
         столбец.addWidget(пояснение)
 
         ряд_папки = QHBoxLayout()
@@ -156,7 +156,7 @@ class ОкноПервогоЗапуска(QDialog):
         self.папка = Path(выбор)
         self.поле_папка.setText(str(self.папка))
         self.приговор.setText(осмотр.warning)
-        self.приговор.setStyleSheet("color: #666;")
+        self.приговор.setStyleSheet("color: #8b949e;")
         self.кнопка_готово.setEnabled(True)
 
 

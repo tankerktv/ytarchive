@@ -23,8 +23,6 @@
         'Starten',
     'Остановить':
         'Anhalten',
-    'Обновить':
-        'Aktualisieren',
     'Запустить выкачку':
         'Herunterladen starten',
     'Остановить выкачку':
@@ -47,8 +45,6 @@
         '{}: Video {} von {}',
     'осталось {}':
         '{} übrig',
-    'Сколько уже лежит в архиве по каждому каналу:':
-        'Wie viel je Kanal bereits im Archiv liegt:',
     'Канал':
         'Kanal',
     'Файлов':
@@ -239,8 +235,6 @@
         '{:.1f} MB/s',
     '{:.1f} ГБ':
         '{:.1f} GB',
-    '{:.2f} ГБ':
-        '{:.2f} GB',
     'Язык:':
         'Sprache:',
     'Системный язык — {}':
@@ -621,8 +615,6 @@
         'Angezeigtes entfernen',
     'Убрать старое…':
         'Altes entfernen…',
-    'Уход за архивом:':
-        'Pflege des Archivs:',
     'Учёт и диск сходятся.':
         'Verzeichnis und Platte stimmen überein.',
     'Файл есть, в учёте нет — такие ролики скачаются второй раз: {}':
@@ -689,4 +681,49 @@
         'Verzeichnis nicht geschrieben: {}',
     'учёт не прочитан: {}':
         'Verzeichnis nicht lesbar: {}',
+    # --- новый вид окна ---
+    'YouTube не отдаёт ролики без входа в аккаунт. Выберите в настройках браузер, в котором вы вошли в YouTube, или положите файл cookies.txt.':
+        'YouTube liefert Videos nur an angemeldete Nutzer. Wählen Sie in den Einstellungen den Browser, in dem Sie bei YouTube angemeldet sind, oder legen Sie eine Datei cookies.txt ab.',
+    '{:.2f} ТБ':
+        '{:.2f} TB',
+    'Архив':
+        'Archiv',
+    'В папке архива лежат ролики в папках, которых нет в списке: {}. Так выглядит канал, переименованный в файле руками.':
+        'Im Archivordner liegen Videos in Ordnern, die nicht in der Liste stehen: {}. So sieht ein Kanal aus, der von Hand in der Datei umbenannt wurde.',
+    'Дата':
+        'Datum',
+    'Дата примерная: YouTube в списке канала пишет «3 года назад». Точная появится, когда ролик будет скачан.':
+        'Das Datum ist ungefähr: In der Kanalliste schreibt YouTube „vor 3 Jahren“. Das genaue erscheint, sobald das Video geladen ist.',
+    'Добавить канал':
+        'Kanal hinzufügen',
+    'Журнал':
+        'Protokoll',
+    'Каналов пока нет. Добавьте первый — программа покажет, сколько в нём роликов и хватит ли места, ещё до того, как начнёт качать.':
+        'Noch keine Kanäle. Fügen Sie den ersten hinzu — das Programm zeigt, wie viele Videos er hat und ob der Platz reicht, bevor es etwas lädt.',
+    'Мои каналы':
+        'Meine Kanäle',
+    'Осторожность':
+        'Vorsicht',
+    'Открыть настройки':
+        'Einstellungen öffnen',
+    'Показать':
+        'Zeigen',
+    'Сеть и расписание':
+        'Netz und Zeitplan',
+    'Скрыть':
+        'Ausblenden',
+    'Уход за архивом':
+        'Pflege des Archivs',
+    'Что качать':
+        'Was geladen wird',
+    'ждёт следующего прохода':
+        'wartet auf den nächsten Durchlauf',
+    'каналов в списке':
+        'Kanäle in der Liste',
+    'объём архива':
+        'Größe des Archivs',
+    'роликов в архиве':
+        'Videos im Archiv',
+    'свободно на диске':
+        'frei auf der Platte',
 }

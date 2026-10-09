@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QSystemTrayIcon,
     QTableWidget,
@@ -45,9 +47,11 @@ from core.archive import parse_archive
 from core.channels import format_channels, move_channel, parse_channels, remove_channel
 from core.config import BROWSERS, ConfigError, dump_config, loads, parse_config
 from core.schedule import format_hours, parse_hours
-from core.status import RunState, build_status, is_new_trouble
+from core.status import Hint, RunState, build_status, is_new_trouble, next_hint, size_parts
 from core.ytdlp_args import ALLOWED_HEIGHTS
 from gui.source import ArchiveSource
+from core.videos import title_from_filename
+from gui.style import ЖЁЛТЫЙ, ЗЕЛЁНЫЙ, КРАСНЫЙ, СЕРЫЙ, СИНИЙ, карточка, плитка, приглушить, применить, роль
 from core.i18n import ИСХОДНЫЙ, НАЗВАНИЯ, СИСТЕМНЫЙ, нормализовать
 from core.locales import КАТАЛОГИ
 from runner.language import _, системный_язык
@@ -58,11 +62,18 @@ REFRESH_MS = 2000
 TAIL_LINES = 300
 
 ЦВЕТА = {
-    RunState.RUNNING: "#2e7d32",
-    RunState.BETWEEN: "#795548",
-    RunState.IDLE: "#616161",
-    RunState.NEEDS_HUMAN: "#c62828",
+    RunState.RUNNING: ЗЕЛЁНЫЙ,
+    RunState.BETWEEN: ЖЁЛТЫЙ,
+    RunState.WAITING: СИНИЙ,
+    RunState.IDLE: СЕРЫЙ,
+    RunState.NEEDS_HUMAN: КРАСНЫЙ,
 }
+
+
+def объём_текст(байт: float) -> str:
+    """Объём словами, в подходящих единицах."""
+    число, единица = size_parts(байт)
+    return (_('{:.2f} ТБ') if единица == "tb" else _('{:.1f} ГБ')).format(число)
 
 
 def нарисовать_значок(цвет: str) -> QIcon:
@@ -184,7 +195,7 @@ class Window(QMainWindow):
         # единой строки объяснения, как и случилось.
         self._фоновые = фоновые
         self.setWindowTitle(_("Архив YouTube"))
-        self.resize(940, 640)
+        self.resize(980, 720)
 
         self.вкладки = QTabWidget()
         self.вкладки.addTab(self._вкладка_обзор(), _("Обзор"))
@@ -214,146 +225,214 @@ class Window(QMainWindow):
     def _вкладка_обзор(self) -> QWidget:
         корень = QWidget()
         столбец = QVBoxLayout(корень)
-        столбец.setContentsMargins(16, 12, 16, 12)
-        столбец.setSpacing(10)
+        столбец.setContentsMargins(18, 16, 18, 16)
+        столбец.setSpacing(12)
 
-        self.заголовок = QLabel(_("читаю состояние…"))
-        шрифт = self.заголовок.font()
-        шрифт.setPointSize(шрифт.pointSize() + 3)
-        шрифт.setBold(True)
-        self.заголовок.setFont(шрифт)
-        self.заголовок.setWordWrap(True)
-        столбец.addWidget(self.заголовок)
-
-        self.подпись = QLabel("")
-        self.подпись.setStyleSheet("color: #666;")
-        self.подпись.setWordWrap(True)
-        столбец.addWidget(self.подпись)
-
-        # Две полосы: текущий файл и проход по каналу. Обе показываются только
-        # когда есть что показывать — пустая полоса на нуле выглядит как
-        # застрявшая работа и тревожит на ровном месте.
-        self.полоса_файла = QProgressBar()
-        self.полоса_файла.setFormat("%p%")
-        self.подпись_файла = QLabel("")
-        self.подпись_файла.setStyleSheet("color: #666;")
-        столбец.addWidget(self.подпись_файла)
-        столбец.addWidget(self.полоса_файла)
-
-        self.полоса_канала = QProgressBar()
-        self.полоса_канала.setFormat("%p%")
-        self.подпись_канала = QLabel("")
-        self.подпись_канала.setStyleSheet("color: #666;")
-        столбец.addWidget(self.подпись_канала)
-        столбец.addWidget(self.полоса_канала)
-
+        # --- состояние и главная кнопка ---
+        # Кнопка одна: показывается та, что сейчас имеет смысл. Две рядом, из
+        # которых одна всегда серая, заставляют каждый раз читать обе.
+        карта, внутри = карточка()
         ряд = QHBoxLayout()
+        ряд.setSpacing(10)
+        self.точка = QLabel("")
+        self.точка.setFixedSize(14, 14)
+        self.заголовок = роль(QLabel(_("читаю состояние…")), "title")
+        self.заголовок.setWordWrap(True)
         self.кнопка_пуск = QPushButton(_("Запустить"))
+        self.кнопка_пуск.setObjectName("primary")
         self.кнопка_стоп = QPushButton(_("Остановить"))
-        обновить = QPushButton(_("Обновить"))
-        for кнопка in (self.кнопка_пуск, self.кнопка_стоп, обновить):
-            ряд.addWidget(кнопка)
-        ряд.addStretch(1)
-        столбец.addLayout(ряд)
+        ряд.addWidget(self.точка)
+        ряд.addWidget(self.заголовок, 1)
+        ряд.addWidget(self.кнопка_пуск)
+        ряд.addWidget(self.кнопка_стоп)
+        внутри.addLayout(ряд)
+
+        self.подпись = приглушить(QLabel(""))
+        self.подпись.setWordWrap(True)
+        внутри.addWidget(self.подпись)
+        столбец.addWidget(карта)
 
         self.кнопка_пуск.clicked.connect(self._пуск)
         self.кнопка_стоп.clicked.connect(self._стоп)
-        обновить.clicked.connect(self.обновить)
+
+        # --- подсказка: чего не хватает, чтобы начать ---
+        self.карта_подсказки, внутри = карточка("hint")
+        ряд = QHBoxLayout()
+        self.текст_подсказки = QLabel("")
+        self.текст_подсказки.setWordWrap(True)
+        self.кнопка_подсказки = QPushButton("")
+        ряд.addWidget(self.текст_подсказки, 1)
+        ряд.addWidget(self.кнопка_подсказки)
+        внутри.addLayout(ряд)
+        self.карта_подсказки.setVisible(False)
+        self.кнопка_подсказки.clicked.connect(self._по_подсказке)
+        self._подсказка = None
+        столбец.addWidget(self.карта_подсказки)
+
+        # --- числа ---
+        ряд_плиток = QHBoxLayout()
+        ряд_плиток.setSpacing(12)
+        self.плитки: dict[str, QLabel] = {}
+        for ключ, название in (
+            ("ролики", _("роликов в архиве")),
+            ("объём", _("объём архива")),
+            ("место", _("свободно на диске")),
+            ("каналы", _("каналов в списке")),
+        ):
+            рамка, значение = плитка(название)
+            self.плитки[ключ] = значение
+            ряд_плиток.addWidget(рамка, 1)
+        столбец.addLayout(ряд_плиток)
+
+        # --- что качается сейчас ---
+        # Показывается, только когда есть что показывать: пустая полоса на нуле
+        # выглядит как застрявшая работа и тревожит на ровном месте.
+        self.карта_сейчас, внутри = карточка()
+        self.подпись_файла = QLabel("")
+        self.подпись_файла.setWordWrap(True)
+        self.полоса_файла = QProgressBar()
+        self.полоса_файла.setTextVisible(False)
+        self.подпись_канала = приглушить(QLabel(""))
+        self.полоса_канала = QProgressBar()
+        self.полоса_канала.setTextVisible(False)
+        for виджет in (
+            self.подпись_файла, self.полоса_файла, self.подпись_канала, self.полоса_канала
+        ):
+            внутри.addWidget(виджет)
+        self.карта_сейчас.setVisible(False)
+        столбец.addWidget(self.карта_сейчас)
+
+        # --- журнал ---
+        ряд = QHBoxLayout()
+        ряд.addWidget(роль(QLabel(_("Журнал")), "section"))
+        ряд.addStretch(1)
+        self.кнопка_журнал = QPushButton(_("Скрыть"))
+        self.кнопка_журнал.setFlat(True)
+        ряд.addWidget(self.кнопка_журнал)
+        столбец.addLayout(ряд)
 
         self.журнал = QPlainTextEdit()
         self.журнал.setReadOnly(True)
         self.журнал.setFont(QFont("Consolas", 10))
         self.журнал.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.журнал.setFrameShape(QFrame.Shape.NoFrame)
         столбец.addWidget(self.журнал, 1)
+        # Пружина держит верх на месте, когда журнал скрыт: без неё карточки
+        # растянулись бы на всё окно.
+        self._пружина_обзора = QWidget()
+        self._пружина_обзора.setVisible(False)
+        столбец.addWidget(self._пружина_обзора, 1)
+        self.кнопка_журнал.clicked.connect(self._переключить_журнал)
         return корень
+
+    def _переключить_журнал(self) -> None:
+        виден = not self.журнал.isVisible()
+        self.журнал.setVisible(виден)
+        self._пружина_обзора.setVisible(not виден)
+        self.кнопка_журнал.setText(_("Скрыть") if виден else _("Показать"))
+
+    def _по_подсказке(self) -> None:
+        """Отвести человека туда, где подсказка исполняется."""
+        if self._подсказка is Hint.NO_CHANNELS:
+            self.вкладки.setCurrentIndex(1)
+            self.поле_поиска.setFocus()
+        elif self._подсказка is Hint.NO_COOKIES:
+            self.вкладки.setCurrentIndex(2)
+            self.поле_куки.setFocus()
 
     # --- вкладка «Каналы» ---------------------------------------------------
 
     def _вкладка_каналы(self) -> QWidget:
         корень = QWidget()
         столбец = QVBoxLayout(корень)
-        столбец.setContentsMargins(16, 12, 16, 12)
+        столбец.setContentsMargins(18, 16, 18, 16)
+        столбец.setSpacing(12)
 
-        # --- поиск канала ---
+        # --- добавить канал ---
+        карта, внутри = карточка()
+        внутри.addWidget(роль(QLabel(_("Добавить канал")), "section"))
         ряд_поиска = QHBoxLayout()
         self.поле_поиска = QLineEdit()
         self.поле_поиска.setPlaceholderText(_("Название канала — например, alex m"))
+        self.поле_поиска.setClearButtonEnabled(True)
         self.кнопка_искать = QPushButton(_("Найти"))
-        ряд_поиска.addWidget(self.поле_поиска, 1)
-        ряд_поиска.addWidget(self.кнопка_искать)
-        столбец.addLayout(ряд_поиска)
-
-        self.поиск_ответ = QLabel("")
-        self.поиск_ответ.setStyleSheet("color: #666;")
-        столбец.addWidget(self.поиск_ответ)
-
-        self.находки = QTableWidget(0, 4)
-        self.находки.setHorizontalHeaderLabels(["", _("Канал"), _("Объём"), _("Влезет")])
-        self.находки.setIconSize(QSize(32, 32))
-        self.находки.horizontalHeader().setStretchLastSection(True)
-        self.находки.setColumnWidth(0, 44)
-        self.находки.setColumnWidth(1, 260)
-        self.находки.setColumnWidth(2, 260)
-        self.находки.setMaximumHeight(170)
-        self.находки.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        столбец.addWidget(self.находки)
-
-        ряд_добавить = QHBoxLayout()
-        self.кнопка_добавить = QPushButton(_("Добавить выбранный канал"))
-        self.кнопка_добавить.setEnabled(False)
+        self.кнопка_искать.setObjectName("primary")
         self.кнопка_по_адресу = QPushButton(_("Добавить по адресу…"))
         self.кнопка_по_адресу.setToolTip(
             _("Плейлист, отдельный ролик или канал, которого нет в поиске.")
         )
-        ряд_добавить.addWidget(self.кнопка_добавить, 1)
-        ряд_добавить.addWidget(self.кнопка_по_адресу)
-        столбец.addLayout(ряд_добавить)
-        self.кнопка_по_адресу.clicked.connect(self._добавить_по_адресу)
+        ряд_поиска.addWidget(self.поле_поиска, 1)
+        ряд_поиска.addWidget(self.кнопка_искать)
+        ряд_поиска.addWidget(self.кнопка_по_адресу)
+        внутри.addLayout(ряд_поиска)
+
+        self.поиск_ответ = приглушить(QLabel(""))
+        self.поиск_ответ.setWordWrap(True)
+        self.поиск_ответ.setVisible(False)
+        внутри.addWidget(self.поиск_ответ)
+
+        # Находки появляются только после поиска: пустая таблица на полэкрана
+        # ничего не говорит и отнимает место у списка каналов.
+        self.находки = QTableWidget(0, 4)
+        self.находки.setHorizontalHeaderLabels(["", _("Канал"), _("Объём"), _("Влезет")])
+        self.находки.setIconSize(QSize(32, 32))
+        self.находки.horizontalHeader().setStretchLastSection(True)
+        self.находки.verticalHeader().setVisible(False)
+        self.находки.setShowGrid(False)
+        self.находки.setColumnWidth(0, 44)
+        self.находки.setColumnWidth(1, 260)
+        self.находки.setColumnWidth(2, 260)
+        self.находки.setMaximumHeight(190)
+        self.находки.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.находки.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.находки.setVisible(False)
+        внутри.addWidget(self.находки)
+
+        self.кнопка_добавить = QPushButton(_("Добавить выбранный канал"))
+        self.кнопка_добавить.setEnabled(False)
+        self.кнопка_добавить.setVisible(False)
+        внутри.addWidget(self.кнопка_добавить)
+        столбец.addWidget(карта)
 
         self.кнопка_искать.clicked.connect(self._искать)
         self.поле_поиска.returnPressed.connect(self._искать)
         self.находки.itemSelectionChanged.connect(self._выбор_находки)
         self.кнопка_добавить.clicked.connect(self._добавить_находку)
+        self.кнопка_по_адресу.clicked.connect(self._добавить_по_адресу)
         self._находки: list = []
         self._поиск = None
 
-        столбец.addWidget(QLabel(_("Сколько уже лежит в архиве по каждому каналу:")))
-        self.таблица = QTableWidget(0, 3)
-        self.таблица.setHorizontalHeaderLabels([_("Канал"), _("Файлов"), _("Объём")])
-        self.таблица.horizontalHeader().setStretchLastSection(True)
-        self.таблица.setColumnWidth(0, 380)
-        self.таблица.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        столбец.addWidget(self.таблица)
-
-        про_порядок = QLabel(
+        # --- список каналов ---
+        столбец.addWidget(роль(QLabel(_("Мои каналы")), "section"))
+        про_порядок = приглушить(QLabel(
             _("Список каналов. Порядок здесь — это порядок обхода: верхний "
             "забирается первым.")
-        )
+        ))
         # С переносом: по-немецки эта строка вдвое длиннее и без него
         # распирала окно до 1250 точек.
         про_порядок.setWordWrap(True)
         столбец.addWidget(про_порядок)
+
         ряд_списка = QHBoxLayout()
+        ряд_списка.setSpacing(12)
         self.список_каналов = QTableWidget(0, 4)
         self.список_каналов.setHorizontalHeaderLabels(["", _("Канал"), _("Файлов"), _("Объём")])
         self.список_каналов.horizontalHeader().setStretchLastSection(True)
-        self.список_каналов.setColumnWidth(0, 52)
-        self.список_каналов.setColumnWidth(1, 330)
-        self.список_каналов.setColumnWidth(2, 80)
+        self.список_каналов.setColumnWidth(0, 56)
+        self.список_каналов.setColumnWidth(1, 360)
+        self.список_каналов.setColumnWidth(2, 90)
         self.список_каналов.verticalHeader().setVisible(False)
+        self.список_каналов.setShowGrid(False)
+        self.список_каналов.setAlternatingRowColors(True)
         self.список_каналов.setIconSize(QSize(40, 40))
         self.список_каналов.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.список_каналов.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.список_каналов.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         ряд_списка.addWidget(self.список_каналов, 1)
 
+        # Сначала то, что делают с каналом чаще всего; удаление — последним
+        # и отдельно, чтобы не попасть в него мимо соседней кнопки.
         кнопки = QVBoxLayout()
-        self.кнопка_вверх = QPushButton(_("↑ Выше"))
-        self.кнопка_вниз = QPushButton(_("↓ Ниже"))
-        self.кнопка_убрать = QPushButton(_("Убрать"))
-        self.кнопка_имя = QPushButton(_("Переименовать…"))
-        self.кнопка_имя.setToolTip(_("Сменить название канала вместе с его папкой."))
         self.кнопка_ролики = QPushButton(_("Выбрать ролики…"))
         self.кнопка_ролики.setToolTip(
             _("Список роликов канала с галочками. По умолчанию отмечены все.")
@@ -362,24 +441,36 @@ class Window(QMainWindow):
         self.кнопка_правила.setToolTip(
             _("Не короче, не длиннее, не старше — одной строкой вместо сотни галочек.")
         )
-        for к in (
-            self.кнопка_вверх,
-            self.кнопка_вниз,
-            self.кнопка_убрать,
-            self.кнопка_имя,
-            self.кнопка_ролики,
-            self.кнопка_правила,
-        ):
+        self.кнопка_имя = QPushButton(_("Переименовать…"))
+        self.кнопка_имя.setToolTip(_("Сменить название канала вместе с его папкой."))
+        self.кнопка_вверх = QPushButton(_("↑ Выше"))
+        self.кнопка_вниз = QPushButton(_("↓ Ниже"))
+        self.кнопка_убрать = QPushButton(_("Убрать"))
+        for к in (self.кнопка_ролики, self.кнопка_правила, self.кнопка_имя):
+            к.setEnabled(False)
+            кнопки.addWidget(к)
+        кнопки.addSpacing(10)
+        for к in (self.кнопка_вверх, self.кнопка_вниз):
             к.setEnabled(False)
             кнопки.addWidget(к)
         кнопки.addStretch(1)
+        self.кнопка_убрать.setEnabled(False)
+        кнопки.addWidget(self.кнопка_убрать)
         ряд_списка.addLayout(кнопки)
         столбец.addLayout(ряд_списка, 1)
 
-        self.каналы_ответ = QLabel("")
-        self.каналы_ответ.setStyleSheet("color: #666;")
+        self.каналы_ответ = приглушить(QLabel(""))
         self.каналы_ответ.setWordWrap(True)
         столбец.addWidget(self.каналы_ответ)
+
+        # Папки, которых нет в списке. Именно так выглядел расколотый архив:
+        # рядом с `SoyuzUS` молча вырос `Soyuz`. Прежде это было видно по
+        # отдельной таблице папок; теперь говорится словами и только когда есть.
+        self.чужие_папки = QLabel("")
+        self.чужие_папки.setWordWrap(True)
+        self.чужие_папки.setStyleSheet(f"color: {ЖЁЛТЫЙ};")
+        self.чужие_папки.setVisible(False)
+        столбец.addWidget(self.чужие_папки)
 
         self.кнопка_вверх.clicked.connect(lambda: self._переставить(-1))
         self.кнопка_вниз.clicked.connect(lambda: self._переставить(+1))
@@ -388,6 +479,7 @@ class Window(QMainWindow):
         self.кнопка_имя.clicked.connect(self._переименовать_канал)
         self.кнопка_правила.clicked.connect(self._правила_канала)
         self.список_каналов.itemSelectionChanged.connect(self._выбор_канала)
+        self.список_каналов.itemDoubleClicked.connect(lambda _ячейка: self._выбрать_ролики())
         self._каналы: list = []
         self._перечитать_каналы()
         return корень
@@ -441,6 +533,7 @@ class Window(QMainWindow):
         if not согласие or not имя.strip():
             return
         self.поиск_ответ.setText(self.source.add_channel(имя.strip(), адрес))
+        self.поиск_ответ.setVisible(True)
         self._перечитать_каналы()
 
     def _выбрать_ролики(self) -> None:
@@ -491,7 +584,6 @@ class Window(QMainWindow):
         self.каналы_ответ.setText(ответ.text)
         if ответ.ok:
             self._перечитать_каналы()
-            self._обновить_таблицу()
 
     def _убрать_канал(self) -> None:
         строки = self.список_каналов.selectionModel().selectedRows()
@@ -514,6 +606,7 @@ class Window(QMainWindow):
         запрос = self.поле_поиска.text().strip()
         if not запрос:
             self.поиск_ответ.setText(_("введите название"))
+            self.поиск_ответ.setVisible(True)
             return
         if self._поиск is not None and self._поиск.isRunning():
             self._поиск.бросить()
@@ -523,6 +616,7 @@ class Window(QMainWindow):
         self.кнопка_добавить.setEnabled(False)
         self.кнопка_искать.setEnabled(False)
         self.поиск_ответ.setText(_("ищу…"))
+        self.поиск_ответ.setVisible(True)
 
         self._поиск = ПоискКаналов(self.source, запрос)
         self._поиск.найдено.connect(self._показать_находки)
@@ -533,6 +627,9 @@ class Window(QMainWindow):
     def _показать_находки(self, кандидаты: list, ответ: str) -> None:
         self._находки = list(кандидаты)
         self.поиск_ответ.setText(ответ)
+        self.поиск_ответ.setVisible(bool(ответ))
+        self.находки.setVisible(bool(self._находки))
+        self.кнопка_добавить.setVisible(bool(self._находки))
         self.находки.setRowCount(len(self._находки))
         for номер, кандидат in enumerate(self._находки):
             self._нарисовать_находку(номер, кандидат)
@@ -587,6 +684,7 @@ class Window(QMainWindow):
             if ответ != QMessageBox.StandardButton.Yes:
                 return
         self.поиск_ответ.setText(self.source.add_channel(кандидат.name, кандидат.url))
+        self.поиск_ответ.setVisible(True)
         self._перечитать_каналы()
 
     def _перечитать_каналы(self) -> None:
@@ -619,7 +717,7 @@ class Window(QMainWindow):
             self.список_каналов.setItem(номер, 1, название)
             self.список_каналов.setItem(номер, 2, QTableWidgetItem(str(файлов) if файлов else "—"))
             self.список_каналов.setItem(
-                номер, 3, QTableWidgetItem(_('{:.1f} ГБ').format(байт / 1024**3) if байт else "—")
+                номер, 3, QTableWidgetItem(объём_текст(байт) if байт else "—")
             )
         for номер in range(len(self._каналы)):
             self.список_каналов.setRowHeight(номер, 46)
@@ -628,13 +726,36 @@ class Window(QMainWindow):
     # --- вкладка «Настройки» ------------------------------------------------
 
     def _вкладка_настройки(self) -> QWidget:
-        корень = QWidget()
-        столбец = QVBoxLayout(корень)
-        столбец.setContentsMargins(16, 12, 16, 12)
+        # Настроек стало больше, чем помещается в окно, — отсюда прокрутка.
+        # Разделы вместо одного длинного столбца: человек ищет «про скорость»,
+        # а не восьмую строку сверху.
+        корень = QScrollArea()
+        корень.setWidgetResizable(True)
+        корень.setFrameShape(QFrame.Shape.NoFrame)
+        лист = QWidget()
+        корень.setWidget(лист)
+        столбец = QVBoxLayout(лист)
+        столбец.setContentsMargins(18, 16, 18, 16)
+        столбец.setSpacing(12)
 
-        форма = QFormLayout()
+        формы: list[QFormLayout] = []
 
+        def раздел(название: str) -> QFormLayout:
+            карта, внутри = карточка()
+            внутри.addWidget(роль(QLabel(название), "section"))
+            форма = QFormLayout()
+            формы.append(форма)
+            форма.setHorizontalSpacing(16)
+            форма.setVerticalSpacing(8)
+            внутри.addLayout(форма)
+            столбец.addWidget(карта)
+            форма.пояснить = lambda текст: внутри.addWidget(self._пояснение(текст))
+            return форма
+
+        # --- архив ---
+        форма = раздел(_("Архив"))
         ряд_папки = QHBoxLayout()
+        ряд_папки.setContentsMargins(0, 0, 0, 0)
         self.поле_папка = QLineEdit()
         # Только чтение: папку выбирают в проводнике, а не набирают руками.
         # Опечатка здесь означает архив, начатый с нуля.
@@ -659,12 +780,48 @@ class Window(QMainWindow):
         for код in [ИСХОДНЫЙ, *sorted(КАТАЛОГИ)]:
             self.поле_язык.addItem(НАЗВАНИЯ.get(код, код), код)
         форма.addRow(_("Язык:"), self.поле_язык)
+        форма.пояснить(
+            _("Рабочая папка — это и склад роликов, и учёт скачанного. Смена "
+            "папки ничего не переносит: новая папка начинается с того, что "
+            "в ней уже лежит. Выкачка перейдёт на неё со следующего прохода.")
+        )
 
+        # --- что качать ---
+        форма = раздел(_("Что качать"))
         self.поле_качество = QComboBox()
         for h in ALLOWED_HEIGHTS:
             self.поле_качество.addItem(_('до {}p').format(h), h)
         self.поле_av1 = QCheckBox(_("Предпочитать AV1 (тот же вид, файл меньше)"))
         self.поле_субтитры = QCheckBox(_("Забирать субтитры"))
+        self.поле_куки = QComboBox()
+        self.поле_куки.addItem(_("из файла cookies.txt"), "")
+        for браузер in BROWSERS:
+            self.поле_куки.addItem(_("из браузера {}").format(браузер.capitalize()), браузер)
+        форма.addRow(_("Качество:"), self.поле_качество)
+        форма.addRow("", self.поле_av1)
+        форма.addRow("", self.поле_субтитры)
+        форма.addRow(_("Куки YouTube:"), self.поле_куки)
+
+        # --- сеть и расписание ---
+        форма = раздел(_("Сеть и расписание"))
+        self.поле_скорость = QSpinBox()
+        self.поле_скорость.setRange(0, 10_000_000)
+        self.поле_скорость.setSingleStep(256)
+        self.поле_скорость.setSuffix(_(" КиБ/с"))
+        self.поле_скорость.setSpecialValueText(_("без потолка"))
+        self.поле_часы = QLineEdit()
+        self.поле_часы.setPlaceholderText(_("23-7 или 23:00-07:30 — пусто: всегда"))
+        self.поле_ползёт = QSpinBox()
+        self.поле_ползёт.setRange(0, 1_000_000)
+        self.поле_ползёт.setSingleStep(10)
+        self.поле_ползёт.setSuffix(_(" КиБ/с"))
+        self.поле_ползёт.setSpecialValueText(_("не проверять"))
+        форма.addRow(_("Потолок скорости:"), self.поле_скорость)
+        форма.addRow(_("Часы работы:"), self.поле_часы)
+        форма.addRow(_("Откладывать загрузку медленнее:"), self.поле_ползёт)
+
+        # --- осторожность ---
+        форма = раздел(_("Осторожность"))
         self.поле_молчание = QSpinBox()
         self.поле_молчание.setRange(60, 3600)
         self.поле_молчание.setSuffix(_(" с"))
@@ -674,68 +831,41 @@ class Window(QMainWindow):
         self.поле_пауза_макс = QSpinBox()
         self.поле_пауза_макс.setRange(0, 600)
         self.поле_пауза_макс.setSuffix(_(" с"))
-
-        self.поле_куки = QComboBox()
-        self.поле_куки.addItem(_("из файла cookies.txt"), "")
-        for браузер in BROWSERS:
-            self.поле_куки.addItem(_("из браузера {}").format(браузер.capitalize()), браузер)
-        self.поле_скорость = QSpinBox()
-        self.поле_скорость.setRange(0, 10_000_000)
-        self.поле_скорость.setSingleStep(256)
-        self.поле_скорость.setSuffix(_(" КиБ/с"))
-        self.поле_скорость.setSpecialValueText(_("без потолка"))
-        self.поле_ползёт = QSpinBox()
-        self.поле_ползёт.setRange(0, 1_000_000)
-        self.поле_ползёт.setSingleStep(10)
-        self.поле_ползёт.setSuffix(_(" КиБ/с"))
-        self.поле_ползёт.setSpecialValueText(_("не проверять"))
-        self.поле_часы = QLineEdit()
-        self.поле_часы.setPlaceholderText(_("23-7 или 23:00-07:30 — пусто: всегда"))
-
-        форма.addRow(_("Качество:"), self.поле_качество)
-        форма.addRow("", self.поле_av1)
-        форма.addRow("", self.поле_субтитры)
         форма.addRow(_("Считать зависшим после:"), self.поле_молчание)
         форма.addRow(_("Пауза между роликами, от:"), self.поле_пауза_мин)
         форма.addRow(_("до:"), self.поле_пауза_макс)
-        форма.addRow(_("Куки YouTube:"), self.поле_куки)
-        форма.addRow(_("Потолок скорости:"), self.поле_скорость)
-        форма.addRow(_("Откладывать загрузку медленнее:"), self.поле_ползёт)
-        форма.addRow(_("Часы работы:"), self.поле_часы)
-        столбец.addLayout(форма)
-
-        про_папку = QLabel(
-            _("Рабочая папка — это и склад роликов, и учёт скачанного. Смена "
-            "папки ничего не переносит: новая папка начинается с того, что "
-            "в ней уже лежит. Выкачка перейдёт на неё со следующего прохода.")
-        )
-        про_папку.setWordWrap(True)
-        про_папку.setStyleSheet("color: #666;")
-        столбец.addWidget(про_папку)
-
-        подсказка = QLabel(
+        форма.пояснить(
             _("Паузы между роликами берегут доступ: на потоке в тысячи запросов "
             "YouTube начинает отвечать «подтвердите, что вы не бот». "
             "Предел молчания должен быть заметно больше самой длинной паузы, "
             "иначе живую выкачку будут убивать как зависшую.")
         )
-        подсказка.setWordWrap(True)
-        подсказка.setStyleSheet("color: #666;")
-        столбец.addWidget(подсказка)
+
+        # Подписи во всех разделах — одной ширины: иначе у каждого раздела
+        # поля начинаются со своего места, и столбец выглядит изломанным.
+        подписи = [
+            форма.itemAt(строка, QFormLayout.ItemRole.LabelRole).widget()
+            for форма in формы
+            for строка in range(форма.rowCount())
+            if форма.itemAt(строка, QFormLayout.ItemRole.LabelRole) is not None
+        ]
+        ширина = max((подпись.sizeHint().width() for подпись in подписи), default=0)
+        for подпись in подписи:
+            подпись.setMinimumWidth(ширина)
 
         ряд = QHBoxLayout()
         сохранить = QPushButton(_("Сохранить настройки"))
+        сохранить.setObjectName("primary")
         вернуть = QPushButton(_("Вернуть как было"))
         ряд.addWidget(сохранить)
         ряд.addWidget(вернуть)
-        ряд.addStretch(1)
-        self.настройки_ответ = QLabel("")
-        self.настройки_ответ.setStyleSheet("color: #666;")
-        ряд.addWidget(self.настройки_ответ)
+        self.настройки_ответ = приглушить(QLabel(""))
+        ряд.addWidget(self.настройки_ответ, 1)
         столбец.addLayout(ряд)
 
         # --- уход за архивом ---
-        столбец.addWidget(QLabel(_("Уход за архивом:")))
+        карта, внутри = карточка()
+        внутри.addWidget(роль(QLabel(_("Уход за архивом")), "section"))
         ряд_ухода = QHBoxLayout()
         обновить_ytdlp = QPushButton(_("Обновить yt-dlp"))
         сверить = QPushButton(_("Сверить учёт с диском"))
@@ -744,7 +874,8 @@ class Window(QMainWindow):
         for кнопка in (обновить_ytdlp, сверить, убрать):
             ряд_ухода.addWidget(кнопка)
         ряд_ухода.addStretch(1)
-        столбец.addLayout(ряд_ухода)
+        внутри.addLayout(ряд_ухода)
+        столбец.addWidget(карта)
         обновить_ytdlp.clicked.connect(
             lambda: self._команда(_("Обновление yt-dlp"), ("update",))
         )
@@ -767,6 +898,12 @@ class Window(QMainWindow):
         self.кнопка_обзор.clicked.connect(self._выбрать_папку)
         self._перечитать_настройки()
         return корень
+
+    @staticmethod
+    def _пояснение(текст: str) -> QLabel:
+        надпись = приглушить(QLabel(текст))
+        надпись.setWordWrap(True)
+        return надпись
 
     def _команда(self, заголовок: str, доводы: tuple, *, применить: tuple = (), подпись: str = "") -> None:
         from gui.upkeep import ОкноКоманды
@@ -1017,24 +1154,28 @@ class Window(QMainWindow):
         строки = self.source.log_tail(TAIL_LINES)
         архив = parse_archive(self.source.archive_text())
         живое = self.source.live_state()
-        снимок = build_status(
-            process_running=self.source.download_running(),
-            archive_count=len(архив),
-            live=живое,
-        )
-
-        self.заголовок.setText(снимок.headline(_))
-        self.заголовок.setStyleSheet(f"color: {ЦВЕТА[снимок.state]};")
-
         # «Работает» и «качает прямо сейчас» — разные вещи: между проходами
         # обход жив и ждёт. Не различив их, окно предлагало бы запустить
         # уже запущенное.
         обход_работает = self.source.worker_running()
+        снимок = build_status(
+            process_running=self.source.download_running(),
+            archive_count=len(архив),
+            live=живое,
+            worker_running=обход_работает,
+        )
 
-        части = [
-            _("обход работает") if обход_работает else _("обход не запущен"),
-            _('в архиве {} роликов').format(снимок.archive_count),
-        ]
+        цвет = ЦВЕТА[снимок.state]
+        self.заголовок.setText(снимок.title(_))
+        self.точка.setStyleSheet(f"background: {цвет}; border-radius: 7px;")
+        # Цветом пишем только беду. Обычное состояние — обычным текстом:
+        # серый заголовок «не запущена» на тёмной теме был почти не виден,
+        # а цвет состояния и так несёт точка рядом.
+        self.заголовок.setStyleSheet(
+            f"color: {цвет};" if снимок.state is RunState.NEEDS_HUMAN else ""
+        )
+
+        части = [_("обход работает") if обход_работает else _("обход не запущен")]
         if снимок.channel:
             части.append(_('канал {}').format(снимок.channel))
         if снимок.last_size_bytes and снимок.last_speed_bps:
@@ -1047,8 +1188,19 @@ class Window(QMainWindow):
 
         self._обновить_полосы(снимок)
 
-        self.кнопка_пуск.setEnabled(not обход_работает)
-        self.кнопка_стоп.setEnabled(обход_работает)
+        for кнопка, нужна in ((self.кнопка_пуск, not обход_работает), (self.кнопка_стоп, обход_работает)):
+            кнопка.setEnabled(нужна)
+            кнопка.setVisible(нужна)
+
+        папки = self.source.channel_stats()
+        self.плитки["ролики"].setText(f"{снимок.archive_count:,}".replace(",", "\u202f"))
+        всего_байт = sum(байт for _имя, _файлов, байт in папки)
+        self.плитки["объём"].setText(объём_текст(всего_байт) if всего_байт else "—")
+        свободно = self.source.free_bytes()
+        self.плитки["место"].setText(объём_текст(свободно) if свободно else "—")
+        self.плитки["каналы"].setText(str(len(self._каналы)))
+
+        self._обновить_подсказку()
 
         # Беда, требующая человека, говорится всплывающим сообщением: окно
         # обычно свёрнуто в трей, и «истекли куки» в заголовке никто не видит —
@@ -1063,7 +1215,7 @@ class Window(QMainWindow):
             )
         self._сказанная_беда = беда
 
-        self.трей.setIcon(нарисовать_значок(ЦВЕТА[снимок.state]))
+        self.трей.setIcon(нарисовать_значок(цвет))
         self.трей.setToolTip(_('Архив YouTube — {}').format(снимок.headline(_)))
 
         текст = "\n".join(строки)
@@ -1077,7 +1229,25 @@ class Window(QMainWindow):
                 полоса.setValue(полоса.maximum())
             self._последний_журнал = текст
 
-        self._обновить_таблицу()
+        self._обновить_числа(папки)
+
+    def _обновить_подсказку(self) -> None:
+        """Показать, чего не хватает, чтобы выкачка могла начаться."""
+        подсказка = next_hint(channels=len(self._каналы), has_cookies=self.source.has_cookies())
+        self._подсказка = подсказка
+        self.карта_подсказки.setVisible(подсказка is not None)
+        if подсказка is Hint.NO_CHANNELS:
+            self.текст_подсказки.setText(
+                _("Каналов пока нет. Добавьте первый — программа покажет, сколько в нём "
+                  "роликов и хватит ли места, ещё до того, как начнёт качать.")
+            )
+            self.кнопка_подсказки.setText(_("Добавить канал"))
+        elif подсказка is Hint.NO_COOKIES:
+            self.текст_подсказки.setText(
+                _("YouTube не отдаёт ролики без входа в аккаунт. Выберите в настройках "
+                  "браузер, в котором вы вошли в YouTube, или положите файл cookies.txt.")
+            )
+            self.кнопка_подсказки.setText(_("Открыть настройки"))
 
     def _обновить_полосы(self, снимок) -> None:
         """Полосы показываются, только когда есть что показывать.
@@ -1093,7 +1263,7 @@ class Window(QMainWindow):
         self.подпись_файла.setVisible(показать_файл)
         if показать_файл:
             self.полоса_файла.setValue(int(живое.percent))
-            части = [живое.file_name]
+            части = [title_from_filename(живое.file_name), f"{живое.percent:.0f}%"]
             if живое.size_bytes:
                 части.append(_('{:.0f} МБ').format(живое.size_bytes / 1024**2))
             if живое.speed_bps:
@@ -1112,18 +1282,29 @@ class Window(QMainWindow):
                 подпись += _(' · канал {} из {}').format(живое.channel_index, живое.channel_total)
             self.подпись_канала.setText(подпись)
 
-    def _обновить_таблицу(self) -> None:
-        строки = self.source.channel_stats()
-        if self.таблица.rowCount() != len(строки):
-            self.таблица.setRowCount(len(строки))
-        for номер, (имя, файлов, байт) in enumerate(строки):
-            значения = (имя, str(файлов), _('{:.2f} ГБ').format(байт / 1024**3))
-            for столбец, значение in enumerate(значения):
-                ячейка = self.таблица.item(номер, столбец)
-                if ячейка is None:
-                    self.таблица.setItem(номер, столбец, QTableWidgetItem(значение))
-                elif ячейка.text() != значение:
+        self.карта_сейчас.setVisible(показать_файл or показать_канал)
+
+    def _обновить_числа(self, папки: list) -> None:
+        """Обновить счёт файлов в списке каналов и назвать папки не из списка."""
+        по_папкам = {имя: (файлов, байт) for имя, файлов, байт in папки}
+        for номер, канал in enumerate(self._каналы):
+            файлов, байт = по_папкам.get(канал.name, (0, 0))
+            for столбец, значение in (
+                (2, str(файлов) if файлов else "—"),
+                (3, объём_текст(байт) if байт else "—"),
+            ):
+                ячейка = self.список_каналов.item(номер, столбец)
+                if ячейка is not None and ячейка.text() != значение:
                     ячейка.setText(значение)
+
+        свои = {канал.name for канал in self._каналы}
+        чужие = [имя for имя, файлов, _байт in папки if имя not in свои and файлов]
+        self.чужие_папки.setVisible(bool(чужие))
+        if чужие:
+            self.чужие_папки.setText(
+                _("В папке архива лежат ролики в папках, которых нет в списке: {}. "
+                  "Так выглядит канал, переименованный в файле руками.").format(", ".join(чужие))
+            )
 
     # --- кнопки -------------------------------------------------------------
 
@@ -1140,6 +1321,7 @@ def run(source: ArchiveSource, *, selftest: bool = False) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     # Без этого закрытие окна завершило бы программу вместе с треем.
     app.setQuitOnLastWindowClosed(False)
+    применить(app)
     окно = Window(source, фоновые=not selftest)
     окно.show()
     if selftest:

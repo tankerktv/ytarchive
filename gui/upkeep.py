@@ -71,7 +71,7 @@ class ОкноКоманды(QDialog):
 
         столбец = QVBoxLayout(self)
         self.состояние = QLabel("")
-        self.состояние.setStyleSheet("color: #666;")
+        self.состояние.setProperty("role", "muted")
         столбец.addWidget(self.состояние)
 
         self.вывод = QPlainTextEdit()
@@ -159,7 +159,7 @@ class ОкноПравил(QDialog):
               "длительность или дата неизвестны, правилу не подчиняется.")
         )
         пояснение.setWordWrap(True)
-        пояснение.setStyleSheet("color: #666;")
+        пояснение.setProperty("role", "muted")
         столбец.addWidget(пояснение)
 
         форма = QFormLayout()
