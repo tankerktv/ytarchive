@@ -92,10 +92,15 @@ def measure_channel(
         "--no-warnings",
         candidate.url,
     ]
-    outcome = run_watched([*ytdlp, *args], MEASURE_WATCHDOG)
+    # Вывод здесь — данные, по строке на ролик, и нужны все: с пределом журнала
+    # канал на две тысячи роликов измерялся как канал на четыреста, и окно
+    # обещало «влезет» про впятеро больший объём.
+    outcome = run_watched(
+        [*ytdlp, *args], MEASURE_WATCHDOG, separate_streams=True, keep_all_stdout=True
+    )
 
     длительности: list[float] = []
-    for строка in outcome.lines:
+    for строка in outcome.stdout_lines:
         значение = строка.strip()
         try:
             длительности.append(float(значение))

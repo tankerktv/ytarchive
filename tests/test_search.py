@@ -185,3 +185,28 @@ def test_нет_картинок_нет_аватара():
 
     assert pick_avatar([]) == ""
     assert pick_avatar([{"id": "x", "width": 0, "height": 0}]) == ""
+
+
+def test_настоящий_случай_большой_канал_измеряется_целиком(monkeypatch):
+    """Перепись для оценки объёма шла через тот же предел журнала в 400 строк,
+    что и перепись для выкачки. Канал на две тысячи роликов измерялся как
+    канал на четыреста — и окно обещало «влезет» про впятеро больший объём."""
+    from core.search import Candidate
+    from core.supervisor import Verdict
+    from core.ytdlp_args import DownloadSettings
+    from runner import search as поиск
+    from runner.process import RunOutcome
+
+    доводы = {}
+
+    def подделка(argv, policy, **kwargs):
+        доводы.update(kwargs)
+        строки = ["600"] * 2000
+        return RunOutcome(verdict=Verdict.OK, exit_code=0, lines=строки[-400:], stdout_lines=строки)
+
+    monkeypatch.setattr(поиск, "run_watched", подделка)
+    кандидат, ответ = поиск.measure_channel(
+        Candidate(name="Большой", channel_id="UC" + "x" * 22), DownloadSettings("a", "o")
+    )
+    assert доводы.get("keep_all_stdout") is True, "перепись просят хранить целиком"
+    assert кандидат.videos == 2000, ответ
