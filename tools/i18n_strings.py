@@ -27,6 +27,7 @@ import pathlib
     "app/main.py",
     "runner/session.py",
     "runner/daemon.py",
+    "runner/search.py",
     "install.py",
 )
 

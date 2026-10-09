@@ -783,4 +783,18 @@
         'calcul de la taille…',
     '{} · объём не удалось узнать: {}':
         '{} · taille inconnue pour : {}',
+    'пустой запрос':
+        'requête vide',
+    'поиск не удался: {}':
+        'échec de la recherche : {}',
+    'ничего не нашлось':
+        'rien trouvé',
+    'нашлось каналов: {}':
+        'chaînes trouvées : {}',
+    'перепись не удалась: {}':
+        'impossible de lister la chaîne : {}',
+    'измерено':
+        'mesuré',
+    'без объяснения':
+        'sans explication',
 }

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from core.search import Candidate, parse_search_output, with_measurement
 from core.supervisor import WatchdogPolicy
 from core.ytdlp_args import DownloadSettings
+from runner.language import _
 from runner.process import run_watched
 
 #: Поиск обязан отвечать быстро либо не отвечать вовсе: человек ждёт у окна.
@@ -48,7 +49,7 @@ def search_channels(
     """
     query = query.strip()
     if not query:
-        return [], "пустой запрос"
+        return [], _("пустой запрос")
 
     args = [
         *_cookie_args(settings),
@@ -66,9 +67,9 @@ def search_channels(
         # Отличаем «не нашлось» от «не смогли спросить»: человеку это
         # разные новости, и вторая требует от него действий.
         if outcome.exit_code not in (0, None) or outcome.killed:
-            return [], f"поиск не удался: {_первая_беда(outcome.lines)}"
-        return [], "ничего не нашлось"
-    return кандидаты, f"нашлось каналов: {len(кандидаты)}"
+            return [], _('поиск не удался: {}').format(_первая_беда(outcome.lines))
+        return [], _("ничего не нашлось")
+    return кандидаты, _('нашлось каналов: {}').format(len(кандидаты))
 
 
 def measure_channel(
@@ -108,8 +109,8 @@ def measure_channel(
             continue  # NA у трансляций и премьер — это законно
 
     if not длительности:
-        return candidate, f"перепись не удалась: {_первая_беда(outcome.lines)}"
-    return with_measurement(candidate, длительности), "измерено"
+        return candidate, _('перепись не удалась: {}').format(_первая_беда(outcome.lines))
+    return with_measurement(candidate, длительности), _("измерено")
 
 
 def measure_all(
@@ -140,4 +141,4 @@ def _первая_беда(lines: list[str]) -> str:
     for строка in lines:
         if строка.strip().upper().startswith("ERROR"):
             return строка.strip()[:160]
-    return lines[-1][:160] if lines else "без объяснения"
+    return lines[-1][:160] if lines else _("без объяснения")

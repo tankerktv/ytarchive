@@ -783,4 +783,18 @@
         'Umfang wird ermittelt…',
     '{} · объём не удалось узнать: {}':
         '{} · Umfang unbekannt für: {}',
+    'пустой запрос':
+        'leere Anfrage',
+    'поиск не удался: {}':
+        'Suche fehlgeschlagen: {}',
+    'ничего не нашлось':
+        'nichts gefunden',
+    'нашлось каналов: {}':
+        'Kanäle gefunden: {}',
+    'перепись не удалась: {}':
+        'Kanal konnte nicht aufgelistet werden: {}',
+    'измерено':
+        'ermittelt',
+    'без объяснения':
+        'ohne Erklärung',
 }

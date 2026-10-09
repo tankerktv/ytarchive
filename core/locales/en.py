@@ -713,4 +713,18 @@
         'measuring…',
     '{} · объём не удалось узнать: {}':
         '{} · size unknown for: {}',
+    'пустой запрос':
+        'empty query',
+    'поиск не удался: {}':
+        'search failed: {}',
+    'ничего не нашлось':
+        'nothing found',
+    'нашлось каналов: {}':
+        'channels found: {}',
+    'перепись не удалась: {}':
+        'could not list the channel: {}',
+    'измерено':
+        'measured',
+    'без объяснения':
+        'no explanation given',
 }
