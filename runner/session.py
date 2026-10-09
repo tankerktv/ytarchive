@@ -130,6 +130,8 @@ def enumerate_channel(
         config.probe_watchdog,
         separate_streams=True,
         should_stop=should_stop,
+        # Перепись — данные, а не журнал: по строке на ролик, и нужны все.
+        keep_all_stdout=True,
     )
     return parse_listing(outcome.stdout_text)
 

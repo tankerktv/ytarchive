@@ -39,6 +39,10 @@ POLL_INTERVAL = 0.5
 
 #: Сколько строк вывода держим. Полный журнал yt-dlp на большом канале —
 #: это сотни тысяч строк прогресса; хранить их в памяти незачем.
+#:
+#: Это предел для ЖУРНАЛА. К выводу, который разбирается как данные, он не
+#: относится — см. `keep_all_stdout`. Когда относился, перепись канала молча
+#: обрезалась до последних четырёхсот строк.
 KEEP_LINES = 400
 
 
@@ -131,11 +135,19 @@ def run_watched(
     separate_streams: bool = False,
     should_stop: Callable[[], bool] | None = None,
     is_crawling: Callable[[float], bool] | None = None,
+    keep_all_stdout: bool = False,
 ) -> RunOutcome:
     """Запустить команду и держать её под надзором до конца.
 
     `on_line` зовётся на каждую строку вывода — через него интерфейс получает
     прогресс. Исключение в нём не должно ронять выкачку, поэтому оно гасится.
+
+    `keep_all_stdout` — хранить stdout целиком. Нужен там, где вывод — это
+    данные, а не журнал: перепись канала печатает по строке на ролик.
+    Обрезанная до четырёхсот строк, она теряла НАЧАЛО списка, то есть самые
+    свежие ролики: канал на шестьсот роликов переставал получать новое, и
+    ничто об этом не говорило. Так было с первого выпуска и нашлось только
+    тогда, когда перепись стали сравнивать с диском.
     """
     # Потомок обязан говорить в UTF-8. Без этого yt-dlp на Windows печатает
     # кириллицу в системной кодировке, мы читаем её как UTF-8, и названия
@@ -214,7 +226,7 @@ def run_watched(
                 del lines[: len(lines) - KEEP_LINES]
             if свой:
                 из_stdout.append(line)
-                if len(из_stdout) > KEEP_LINES:
+                if not keep_all_stdout and len(из_stdout) > KEEP_LINES:
                     del из_stdout[: len(из_stdout) - KEEP_LINES]
             if on_line is not None:
                 try:
@@ -281,7 +293,7 @@ def run_watched(
         killed=killed,
         kill_failed=kill_failed,
         # При слитых потоках всё пришло через stdout, поэтому список тот же.
-        stdout_lines=из_stdout[-KEEP_LINES:],
+        stdout_lines=из_stdout if keep_all_stdout else из_stdout[-KEEP_LINES:],
     )
 
 
