@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" width="96" align="right" alt="ytarchive logo: a video resting in a tray">
+
 # ytarchive
 
 Keeps a personal archive of YouTube channels: watches a list of channels and

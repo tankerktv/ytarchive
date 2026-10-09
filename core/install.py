@@ -261,6 +261,11 @@ WINDOWS_SHORTCUT_SCRIPT = (
     "$link.TargetPath = $env:YTA_TARGET; "
     "$link.Arguments = $env:YTA_ARGS; "
     "$link.WorkingDirectory = $env:YTA_WORKDIR; "
+    # Без своего значка ярлык показывает значок интерпретатора — змею.
+    # Значение приходит всегда: нет файла значка — зовущий подставляет сам
+    # интерпретатор. Условие здесь потребовало бы фигурных скобок, а их в
+    # сценарии нет намеренно: это примета подстановки значений в текст.
+    "$link.IconLocation = $env:YTA_ICON; "
     "$link.Save(); "
     "Write-Output $path"
 )
@@ -284,7 +289,7 @@ def _exec_quote(довод: str) -> str:
     return '"' + внутри.replace("%", "%%") + '"'
 
 
-def desktop_entry(name: str, comment: str, argv: tuple[str, ...]) -> str:
+def desktop_entry(name: str, comment: str, argv: tuple[str, ...], icon: str = "") -> str:
     """Файл .desktop — и ярлык в меню, и автозапуск: формат у них один."""
     строки = [
         "[Desktop Entry]",
@@ -292,6 +297,8 @@ def desktop_entry(name: str, comment: str, argv: tuple[str, ...]) -> str:
         f"Name={name}",
         f"Comment={comment}",
         "Exec=" + " ".join(_exec_quote(довод) for довод in argv),
+        # Значок — путём к файлу: в тему значков системы мы ничего не ставим.
+        *([f"Icon={icon}"] if icon else []),
         "Terminal=false",
         "Categories=AudioVideo;Network;",
     ]

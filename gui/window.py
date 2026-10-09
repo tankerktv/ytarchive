@@ -49,6 +49,7 @@ from core.config import BROWSERS, ConfigError, dump_config, loads, parse_config
 from core.schedule import format_hours, parse_hours
 from core.status import Hint, RunState, build_status, is_new_trouble, next_hint, size_parts
 from core.ytdlp_args import ALLOWED_HEIGHTS
+from gui.logo import значок
 from gui.source import ArchiveSource
 from core.videos import title_from_filename
 from gui.style import ЖЁЛТЫЙ, ЗЕЛЁНЫЙ, КРАСНЫЙ, СЕРЫЙ, СИНИЙ, карточка, плитка, приглушить, применить, роль
@@ -77,27 +78,12 @@ def объём_текст(байт: float) -> str:
 
 
 def нарисовать_значок(цвет: str) -> QIcon:
-    """Значок для трея — рисуем, а не носим картинкой в репозитории.
+    """Значок для трея: знак программы на плитке цвета состояния.
 
     Цвет отвечает состоянию, поэтому по трею видно, идёт ли выкачка,
-    не открывая окна.
+    не открывая окна. Форма при этом всегда одна — по ней программу узнают.
     """
-    полотно = QPixmap(64, 64)
-    полотно.fill(Qt.GlobalColor.transparent)
-    кисть = QPainter(полотно)
-    кисть.setRenderHint(QPainter.RenderHint.Antialiasing)
-    кисть.setBrush(QColor(цвет))
-    кисть.setPen(Qt.PenStyle.NoPen)
-    кисть.drawEllipse(4, 4, 56, 56)
-    кисть.setPen(QColor("white"))
-    шрифт = QFont()
-    шрифт.setPointSize(30)
-    шрифт.setBold(True)
-    кисть.setFont(шрифт)
-    # Стрелка вниз: «качает». Читается в трее даже в 16 точек.
-    кисть.drawText(полотно.rect(), Qt.AlignmentFlag.AlignCenter, "↓")
-    кисть.end()
-    return QIcon(полотно)
+    return значок(цвет)
 
 
 class ПоискКаналов(QThread):
@@ -195,6 +181,9 @@ class Window(QMainWindow):
         # единой строки объяснения, как и случилось.
         self._фоновые = фоновые
         self.setWindowTitle(_("Архив YouTube"))
+        # В заголовке и на панели задач — фирменный цвет: он не меняется,
+        # и по нему окно находят среди прочих. Цвет состояния — только в трее.
+        self.setWindowIcon(значок())
         self.resize(980, 720)
 
         self.вкладки = QTabWidget()
@@ -1317,8 +1306,27 @@ class Window(QMainWindow):
         self.обновить()
 
 
+def _назваться_системе() -> None:
+    """Сказать Windows, что это отдельная программа, а не «Python».
+
+    Без этого панель задач группирует окно с интерпретатором и рисует его
+    значок — змею вместо знака программы, что бы ни было задано окну.
+    Делается до создания окна; на других системах не нужно.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ytarchive.window")
+    except (AttributeError, OSError):
+        pass  # значок на панели задач — не повод не открыть окно
+
+
 def run(source: ArchiveSource, *, selftest: bool = False) -> int:
+    _назваться_системе()
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setWindowIcon(значок())
     # Без этого закрытие окна завершило бы программу вместе с треем.
     app.setQuitOnLastWindowClosed(False)
     применить(app)

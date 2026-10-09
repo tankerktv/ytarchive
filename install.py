@@ -57,6 +57,8 @@ from core.install import (  # noqa: E402
 from runner.language import _, настроить  # noqa: E402
 
 ПУСКОВОЙ = КОРЕНЬ / "ytarchive.py"
+ЗНАЧОК_ICO = КОРЕНЬ / "assets" / "ytarchive.ico"
+ЗНАЧОК_SVG = КОРЕНЬ / "assets" / "logo.svg"
 
 #: Имя задания launchd и файлов .desktop. Латиницей: это имена файлов,
 #: которые человек будет искать, чтобы убрать программу.
@@ -134,6 +136,9 @@ def _ярлык_windows(папка: str, имя: str, цель: str, довод�
         YTA_TARGET=цель,
         YTA_ARGS=windows_arguments(доводы),
         YTA_WORKDIR=str(КОРЕНЬ),
+        # Нет файла значка — берём значок самого интерпретатора, как было бы
+        # и без этой строки. Ярлык обязан создаться в любом случае.
+        YTA_ICON=str(ЗНАЧОК_ICO) if ЗНАЧОК_ICO.exists() else f"{цель},0",
     )
     try:
         итог = subprocess.run(
@@ -166,6 +171,10 @@ def _каталог_xdg(переменная: str, запасной: str) -> Pat
     return Path(значение) if значение else Path.home() / запасной
 
 
+def значок_linux() -> str:
+    return str(ЗНАЧОК_SVG) if ЗНАЧОК_SVG.exists() else ""
+
+
 def положить_ярлык(платформа: Platform) -> str | None:
     """Ярлык окна. Возвращает, куда положили, или None, если не вышло."""
     имя = _("Архив YouTube")
@@ -181,7 +190,7 @@ def положить_ярлык(платформа: Platform) -> str | None:
         )
     return _записать(
         _каталог_xdg("XDG_DATA_HOME", ".local/share") / "applications" / "ytarchive.desktop",
-        desktop_entry(имя, _("Окно архива роликов"), (питон, *доводы)),
+        desktop_entry(имя, _("Окно архива роликов"), (питон, *доводы), значок_linux()),
     )
 
 
@@ -198,7 +207,7 @@ def завести_автозапуск(платформа: Platform) -> str | N
         )
     return _записать(
         _каталог_xdg("XDG_CONFIG_HOME", ".config") / "autostart" / "ytarchive-daemon.desktop",
-        desktop_entry(имя, _("Выкачка новых роликов в фоне"), (питон, *доводы)),
+        desktop_entry(имя, _("Выкачка новых роликов в фоне"), (питон, *доводы), значок_linux()),
     )
 
 
