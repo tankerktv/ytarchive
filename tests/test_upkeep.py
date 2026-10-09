@@ -171,10 +171,16 @@ def test_чистка_повторов_не_теряет_ни_одного_ро�
 
 
 def test_свой_yt_dlp_обновляется_через_pip_окружения():
-    команда = update_command(
-        r"C:\yta\.venv\Scripts\yt-dlp.EXE", r"C:\yta\.venv\scripts", r"C:\yta\.venv\Scripts\python.exe"
-    )
-    assert команда == (r"C:\yta\.venv\Scripts\python.exe", "-m", "pip", "install", "--upgrade", "yt-dlp")
+    """Пути здесь в одном стиле для всех систем: проверка с путями Windows
+    падала на Linux, где обратная черта — обычный знак имени, а не разделитель."""
+    команда = update_command("/opt/yta/.venv/bin/yt-dlp", "/opt/yta/.venv/bin", "/opt/yta/.venv/bin/python")
+    assert команда == ("/opt/yta/.venv/bin/python", "-m", "pip", "install", "--upgrade", "yt-dlp")
+
+
+def test_регистр_пути_не_мешает_узнать_своё():
+    """На Windows один и тот же каталог приходит то `Scripts`, то `scripts`."""
+    команда = update_command("/opt/yta/.venv/Scripts/yt-dlp.EXE", "/opt/yta/.venv/scripts", "py")
+    assert команда[:3] == ("py", "-m", "pip")
 
 
 def test_чужой_yt_dlp_обновляет_себя_сам():
