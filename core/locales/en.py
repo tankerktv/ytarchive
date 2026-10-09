@@ -727,4 +727,49 @@
         'measured',
     'без объяснения':
         'no explanation given',
+    # --- уведомления ---
+    'Архив YouTube: выкачка остановлена — {}':
+        'YouTube Archive: downloading has stopped — {}',
+    'Архив YouTube: выкачка снова работает':
+        'YouTube Archive: downloading is working again',
+    'Архив YouTube: проверка уведомлений. Если вы это читаете — всё настроено.':
+        'YouTube Archive: notification test. If you are reading this, everything is set up.',
+    'Кому писать:':
+        'Send to:',
+    'Не отправилось: {}':
+        'Not sent: {}',
+    'Обход напишет, когда ему нужен человек — истекли куки, устарел yt-dlp, — и когда беда прошла. Ключ бота хранится в отдельном файле, а не в настройках: настройки показывают и копируют, ключу в них не место.':
+        'The downloader writes when it needs you — cookies expired, yt-dlp outdated — and when the trouble is over. The bot token lives in a separate file, not in the settings: settings get shown and copied, and a token does not belong there.',
+    'Послать пробное сообщение. Сначала сохраните настройки.':
+        'Send a test message. Save the settings first.',
+    'Пробное сообщение отправлено — проверьте Telegram.':
+        'Test message sent — check Telegram.',
+    'Проверить…':
+        'Test…',
+    'Проверка уведомлений':
+        'Notification test',
+    'Уведомления в Telegram':
+        'Telegram notifications',
+    'Уведомления не настроены: в разделе [notify] нужны telegram_token_file и telegram_chat.':
+        'Notifications are not set up: the [notify] section needs telegram_token_file and telegram_chat.',
+    'Файл с ключом бота':
+        'Bot token file',
+    'Файл с ключом бота:':
+        'Bot token file:',
+    'в файле с ключом бота лежит не ключ: ждём строку вида 123456:ABC…':
+        'the bot token file does not contain a token: a line like 123456:ABC… is expected',
+    'номер беседы или @имя канала':
+        'chat number or @channel name',
+    'проверить уведомления в Telegram':
+        'test Telegram notifications',
+    'путь к файлу с ключом бота — не сам ключ':
+        'path to the file holding the bot token — not the token itself',
+    'сообщение в Telegram не ушло: {}':
+        'the Telegram message was not sent: {}',
+    'сообщение в Telegram отправлено':
+        'Telegram message sent',
+    'уведомления не настроены':
+        'notifications are not set up',
+    'файл с ключом бота не читается: {}':
+        'the bot token file cannot be read: {}',
 }

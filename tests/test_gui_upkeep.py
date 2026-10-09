@@ -211,3 +211,25 @@ def test_окно_говорит_о_беде_один_раз(окно, tmp_path)
     )
     окно.обновить()
     assert len(сказано) == 2, "беда прошла и вернулась — это новая беда"
+
+
+def test_уведомления_сохраняются_из_окна_путём_а_не_ключом(окно, tmp_path):
+    файл = tmp_path / "bot.key"
+    окно.поле_ключ.setText(str(файл))
+    окно.поле_беседа.setText("-100123")
+    окно._сохранить_настройки()
+
+    config = настройки(окно)
+    assert config.notify.telegram_token_file == str(файл) and config.notify.telegram_chat == "-100123"
+    assert "telegram_token_file" in окно.source.config_text()
+
+
+def test_половина_настройки_уведомлений_не_сохраняется(окно, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    сказано = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _окно, _заголовок, текст: сказано.append(текст))
+    окно.поле_беседа.setText("-100123")
+    окно._сохранить_настройки()
+    assert not настройки(окно).notify.enabled
+    assert сказано, "причина отказа показана, а не проглочена"

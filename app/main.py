@@ -14,6 +14,7 @@
     ytarchive clean           показать, что из старого можно убрать
     ytarchive update          обновить yt-dlp
     ytarchive nfo             описания для медиасервера (Jellyfin, Kodi, Plex)
+    ytarchive notify          проверить уведомления в Telegram
     ytarchive gui             окно наблюдения
 """
 
@@ -647,10 +648,18 @@ def cmd_daemon(args) -> int:
     session = build_session(config, base)
     tools = resolve(base, config.paths.archive).parent
 
-    def проход(should_stop):
-        return один_проход(config, base, session, should_stop=should_stop)
-
     logs_dir = resolve(base, config.paths.logs)
+    #: Причина, о которой уже сказано в Telegram. Живёт, пока жив обход.
+    сказано = ""
+
+    def проход(should_stop):
+        nonlocal сказано
+        итог = один_проход(config, base, session, should_stop=should_stop)
+        # Пустой итог — прохода не было (замок занят другим экземпляром).
+        # По нему нельзя судить ни о беде, ни о том, что она прошла.
+        if config.notify.enabled and итог.results:
+            сказано = уведомить(config, итог, сказано, скажи)
+        return итог
 
     def скажи(текст: str) -> None:
         строка = f"{datetime.now():%H:%M:%S}  {текст}"
@@ -673,6 +682,48 @@ def cmd_daemon(args) -> int:
         passes=args.passes,
     )
     return 0 if сделано or args.passes == 0 else 1
+
+
+def уведомить(config: Config, итог: SessionSummary, сказано: str, скажи) -> str:
+    """Сказать в Telegram о новой беде или о том, что она прошла.
+
+    Возвращает причину, о которой теперь сказано. Если отправить не вышло,
+    считаем, что не сказано: попробуем после следующего прохода, а не
+    промолчим навсегда.
+    """
+    from core.notify import Change, judge_change
+    from runner.notify import send
+
+    причина = итог.stopped[0].stopped_reason if итог.stopped else ""
+    перемена = judge_change(сказано, причина)
+    if перемена == Change.NOTHING:
+        return сказано
+    if перемена == Change.TROUBLE:
+        текст = _('Архив YouTube: выкачка остановлена — {}').format(_(причина))
+    else:
+        текст = _("Архив YouTube: выкачка снова работает")
+    получилось, объяснение = send(config.notify, текст)
+    if получилось:
+        скажи(_("сообщение в Telegram отправлено"))
+        return причина
+    скажи(_('сообщение в Telegram не ушло: {}').format(объяснение))
+    return сказано
+
+
+def cmd_notify(args) -> int:
+    """Проверить уведомления: послать пробное сообщение и сказать, что вышло."""
+    from runner.notify import send
+
+    config, _путь = load_config(Path(args.config))
+    if not config.notify.enabled:
+        print(_("Уведомления не настроены: в разделе [notify] нужны telegram_token_file и telegram_chat."))
+        return 1
+    получилось, объяснение = send(config.notify, _("Архив YouTube: проверка уведомлений. Если вы это читаете — всё настроено."))
+    if получилось:
+        print(_("Пробное сообщение отправлено — проверьте Telegram."))
+        return 0
+    print(_('Не отправилось: {}').format(объяснение))
+    return 1
 
 
 def cmd_stop(args) -> int:
@@ -839,6 +890,8 @@ def main(argv: list[str] | None = None) -> int:
     p_clean.set_defaults(func=cmd_clean)
 
     sub.add_parser("update", help=_("обновить yt-dlp")).set_defaults(func=cmd_update)
+
+    sub.add_parser("notify", help=_("проверить уведомления в Telegram")).set_defaults(func=cmd_notify)
 
     p_nfo = sub.add_parser("nfo", help=_("описания для медиасервера"))
     p_nfo.add_argument("--apply", action="store_true", help=_("записать, а не только посчитать"))

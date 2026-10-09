@@ -20,7 +20,8 @@ all the memory. Most of the decisions below come from that.
   next pass; what was downloaded is kept. When everything is slow, the program
   concludes it is the connection and stops deferring.
 * **Calls for you by itself.** Expired cookies or an outdated yt-dlp come as a
-  tray notification, not as a line in a window that is minimised.
+  tray notification and as a Telegram message: the downloader runs without
+  the window, and without it there was nobody to tell.
 * **Explains refusals in words.** “Cookies expired”, “yt-dlp is outdated”,
   “network failure” — instead of an exit code. A failure common to every
   channel is reported once, not repeated per channel.
@@ -89,6 +90,7 @@ python ytarchive.py verify    # check the record against the files on disk
 python ytarchive.py clean     # show what old files can be removed
 python ytarchive.py update    # update yt-dlp
 python ytarchive.py nfo       # description files for a media server
+python ytarchive.py notify    # test Telegram notifications
 python ytarchive.py gui       # the window
 ```
 
@@ -147,6 +149,7 @@ named rather than silently ignored.
 | `[limits]` | silence limit, pauses between videos, slow-download threshold, how long logs are kept |
 | `[schedule]` | pauses between passes, working hours |
 | `[interface]` | window language |
+| `[notify]` | Telegram notifications: path to the bot token file and the chat number |
 
 The silence limit must be noticeably larger than the pause between videos, or
 the watchdog will kill a healthy download. This is checked when the settings

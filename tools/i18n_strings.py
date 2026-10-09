@@ -28,6 +28,7 @@ import pathlib
     "runner/session.py",
     "runner/daemon.py",
     "runner/search.py",
+    "runner/notify.py",
     "install.py",
 )
 

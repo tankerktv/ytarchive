@@ -202,6 +202,32 @@ To see what would be downloaded and how big it is, without downloading:
 .venv/bin/python ytarchive.py plan
 ```
 
+## Telegram notifications
+
+The downloader runs without the window, and without the window there is
+nobody to tell about trouble — expired cookies, an outdated yt-dlp. To have
+it write to you:
+
+1. In Telegram open `@BotFather`, send `/newbot` and answer two questions.
+   You get a **bot token** — a line like `123456:ABC…`.
+2. Save the token into a text file — one line, nothing else. Keep the file
+   where cloud sync and backups do not look.
+3. Send your bot any message: until you write first, a bot cannot write to you.
+4. Find out your chat number — `@userinfobot` tells it, for example.
+5. In the window’s settings, section “Telegram notifications”, give the token
+   file and the chat number, save, and press “Test…”.
+
+A test message arrives. From then on the program writes when it needs you,
+and once more when the trouble is over. It reports the same trouble once,
+not every hour.
+
+> **The bot token is the right to write in its name.** The program’s settings
+> hold only the path to the file; the token itself never gets there and is
+> never written to the log. Do not paste the token into a command line or a
+> chat: a token seen by someone else gets replaced (`/revoke` at `@BotFather`).
+
+The same from the command line: `ytarchive.py notify`.
+
 ## Updating
 
 Put the new version over the old one (or `git pull`) and run the installer

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.i18n import НАЗВАНИЯ, СИСТЕМНЫЙ
+from core.notify import Notify
 from core.schedule import Hours, Rhythm, format_hours, parse_hours
 
 # tomllib появился в 3.11. На машине, где это писалось, настоящий
@@ -27,7 +28,10 @@ except ModuleNotFoundError:  # pragma: no cover — ветка для 3.10
 from core.ytdlp_args import ALLOWED_HEIGHTS
 
 #: Ключи, которые мы понимаем. Всё остальное — повод пожаловаться.
-KNOWN_SECTIONS = {"paths", "download", "limits", "schedule", "interface"}
+KNOWN_SECTIONS = {"paths", "download", "limits", "schedule", "interface", "notify"}
+#: Куда слать уведомления. Ключа бота здесь нет и быть не должно — только
+#: путь к файлу с ним: настройки показывают, копируют и кладут в резервные копии.
+KNOWN_NOTIFY = {"telegram_token_file", "telegram_chat"}
 #: Язык интерфейса. Отдельным разделом, а не в [download]: он про окно,
 #: а не про то, что и как качать.
 KNOWN_INTERFACE = {"language"}
@@ -105,6 +109,8 @@ class Config:
     media_server: bool = False
     #: Часы, когда качать можно. None — всегда.
     hours: Hours | None = None
+    #: Уведомления, когда нужен человек.
+    notify: Notify = Notify()
     #: Язык интерфейса. «system» значит «спросить у системы» — так и стоит
     #: по умолчанию: чужой язык на первом запуске хуже отсутствия выбора.
     language: str = СИСТЕМНЫЙ
@@ -231,8 +237,25 @@ def parse_config(data: dict) -> Config:
             f"{СИСТЕМНЫЙ}, {', '.join(sorted(НАЗВАНИЯ))}"
         )
 
+    raw_notify = data.get("notify", {})
+    if not isinstance(raw_notify, dict):
+        raise ConfigError("раздел [notify] должен быть таблицей")
+    _check_unknown("notify", raw_notify, KNOWN_NOTIFY)
+    notify = Notify(
+        telegram_token_file=str(raw_notify.get("telegram_token_file", "")).strip(),
+        telegram_chat=str(raw_notify.get("telegram_chat", "")).strip(),
+    )
+    if bool(notify.telegram_token_file) != bool(notify.telegram_chat):
+        # Половина настройки — это выключенные уведомления, о которых человек
+        # думает, что они включены. Узнает он об этом, когда архив простоит неделю.
+        raise ConfigError(
+            "в разделе [notify] задано только одно из двух: нужны и telegram_token_file, "
+            "и telegram_chat — либо оба пустые, чтобы уведомления были выключены"
+        )
+
     return Config(
         paths=paths,
+        notify=notify,
         rhythm=rhythm,
         hours=hours,
         cookies_browser=cookies_browser,
@@ -334,6 +357,15 @@ hours = {_toml_str(format_hours(config.hours))}
 [interface]
 # Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.
 language = {_toml_str(config.language)}
+
+[notify]
+# Сообщение в Telegram, когда нужен человек (истекли куки, устарел yt-dlp)
+# и когда беда прошла. Оба поля пустые — уведомления выключены.
+# Сюда пишется ПУТЬ К ФАЙЛУ с ключом бота, а не сам ключ: настройки
+# показывают и копируют, ключу в них не место.
+telegram_token_file = {_toml_str(config.notify.telegram_token_file)}
+# Кому писать: номер беседы или @имя канала.
+telegram_chat = {_toml_str(config.notify.telegram_chat)}
 """
 
 
@@ -406,4 +438,13 @@ hours = ""
 [interface]
 # Язык окна. «system» — взять у системы. Иначе код языка: ru, en, de, es, fr.
 language = "system"
+
+[notify]
+# Сообщение в Telegram, когда нужен человек (истекли куки, устарел yt-dlp)
+# и когда беда прошла. Оба поля пустые — уведомления выключены.
+# Сюда пишется ПУТЬ К ФАЙЛУ с ключом бота, а не сам ключ: настройки
+# показывают и копируют, ключу в них не место.
+telegram_token_file = ""
+# Кому писать: номер беседы или @имя канала.
+telegram_chat = ""
 """

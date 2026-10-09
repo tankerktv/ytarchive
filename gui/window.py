@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 from core.archive import parse_archive
 from core.channels import format_channels, move_channel, parse_channels, remove_channel
 from core.config import BROWSERS, ConfigError, dump_config, loads, parse_config
+from core.notify import Notify
 from core.schedule import format_hours, parse_hours
 from core.status import Hint, RunState, build_status, is_new_trouble, next_hint, size_parts
 from core.ytdlp_args import ALLOWED_HEIGHTS
@@ -887,6 +888,39 @@ class Window(QMainWindow):
         for подпись in подписи:
             подпись.setMinimumWidth(ширина)
 
+        # --- уведомления ---
+        форма = раздел(_("Уведомления в Telegram"))
+        ряд_ключа = QHBoxLayout()
+        ряд_ключа.setContentsMargins(0, 0, 0, 0)
+        self.поле_ключ = QLineEdit()
+        self.поле_ключ.setPlaceholderText(_("путь к файлу с ключом бота — не сам ключ"))
+        выбрать_ключ = QPushButton(_("Обзор…"))
+        ряд_ключа.addWidget(self.поле_ключ, 1)
+        ряд_ключа.addWidget(выбрать_ключ)
+        обёртка_ключа = QWidget()
+        обёртка_ключа.setLayout(ряд_ключа)
+        ряд_беседы = QHBoxLayout()
+        ряд_беседы.setContentsMargins(0, 0, 0, 0)
+        self.поле_беседа = QLineEdit()
+        self.поле_беседа.setPlaceholderText(_("номер беседы или @имя канала"))
+        проверить = QPushButton(_("Проверить…"))
+        проверить.setToolTip(_("Послать пробное сообщение. Сначала сохраните настройки."))
+        ряд_беседы.addWidget(self.поле_беседа, 1)
+        ряд_беседы.addWidget(проверить)
+        обёртка_беседы = QWidget()
+        обёртка_беседы.setLayout(ряд_беседы)
+        форма.addRow(_("Файл с ключом бота:"), обёртка_ключа)
+        форма.addRow(_("Кому писать:"), обёртка_беседы)
+        форма.пояснить(
+            _("Обход напишет, когда ему нужен человек — истекли куки, устарел yt-dlp, — "
+              "и когда беда прошла. Ключ бота хранится в отдельном файле, а не в "
+              "настройках: настройки показывают и копируют, ключу в них не место.")
+        )
+        выбрать_ключ.clicked.connect(self._выбрать_файл_ключа)
+        проверить.clicked.connect(
+            lambda: self._команда(_("Проверка уведомлений"), ("notify",))
+        )
+
         ряд = QHBoxLayout()
         сохранить = QPushButton(_("Сохранить настройки"))
         сохранить.setObjectName("primary")
@@ -947,6 +981,13 @@ class Window(QMainWindow):
             применить=применить, подпись_применить=подпись, parent=self,
         ).exec()
 
+    def _выбрать_файл_ключа(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        выбор, _фильтр = QFileDialog.getOpenFileName(self, _("Файл с ключом бота"), self.поле_ключ.text())
+        if выбор:
+            self.поле_ключ.setText(выбор)
+
     def _выбрать_папку(self) -> None:
         """Выбрать рабочую папку. Согласие спрашивается словами о последствиях:
         учёт скачанного лежит внутри папки, и пустая означает всё заново.
@@ -1002,6 +1043,8 @@ class Window(QMainWindow):
         self.поле_скорость.setValue(config.rate_limit)
         self.поле_ползёт.setValue(config.limits.crawl_speed)
         self.поле_часы.setText(format_hours(config.hours))
+        self.поле_ключ.setText(config.notify.telegram_token_file)
+        self.поле_беседа.setText(config.notify.telegram_chat)
         self.настройки_ответ.setText("")
 
     def _сохранить_настройки(self) -> None:
@@ -1036,6 +1079,10 @@ class Window(QMainWindow):
             cookies_browser=self.поле_куки.currentData(),
             rate_limit=self.поле_скорость.value(),
             hours=часы,
+            notify=Notify(
+                telegram_token_file=self.поле_ключ.text().strip(),
+                telegram_chat=self.поле_беседа.text().strip(),
+            ),
         )
         текст = dump_config(новый)
         try:

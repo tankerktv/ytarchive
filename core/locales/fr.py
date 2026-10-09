@@ -797,4 +797,49 @@
         'mesuré',
     'без объяснения':
         'sans explication',
+    # --- уведомления ---
+    'Архив YouTube: выкачка остановлена — {}':
+        'Archive YouTube : téléchargement arrêté — {}',
+    'Архив YouTube: выкачка снова работает':
+        'Archive YouTube : le téléchargement fonctionne à nouveau',
+    'Архив YouTube: проверка уведомлений. Если вы это читаете — всё настроено.':
+        'Archive YouTube : test des notifications. Si vous lisez ceci, tout est configuré.',
+    'Кому писать:':
+        'Destinataire :',
+    'Не отправилось: {}':
+        'Non envoyé : {}',
+    'Обход напишет, когда ему нужен человек — истекли куки, устарел yt-dlp, — и когда беда прошла. Ключ бота хранится в отдельном файле, а не в настройках: настройки показывают и копируют, ключу в них не место.':
+        'Le téléchargement écrit quand il a besoin de vous — cookies expirés, yt-dlp obsolète — et quand le problème est résolu. Le jeton du bot se trouve dans un fichier séparé, pas dans les réglages : les réglages se montrent et se copient, un jeton n’y a pas sa place.',
+    'Послать пробное сообщение. Сначала сохраните настройки.':
+        'Envoyer un message de test. Enregistrez d’abord les réglages.',
+    'Пробное сообщение отправлено — проверьте Telegram.':
+        'Message de test envoyé — vérifiez Telegram.',
+    'Проверить…':
+        'Tester…',
+    'Проверка уведомлений':
+        'Test des notifications',
+    'Уведомления в Telegram':
+        'Notifications Telegram',
+    'Уведомления не настроены: в разделе [notify] нужны telegram_token_file и telegram_chat.':
+        'Les notifications ne sont pas configurées : la section [notify] requiert telegram_token_file et telegram_chat.',
+    'Файл с ключом бота':
+        'Fichier du jeton du bot',
+    'Файл с ключом бота:':
+        'Fichier du jeton du bot :',
+    'в файле с ключом бота лежит не ключ: ждём строку вида 123456:ABC…':
+        'le fichier du jeton ne contient pas de jeton : une ligne du type 123456:ABC… est attendue',
+    'номер беседы или @имя канала':
+        'numéro de la conversation ou @nom du canal',
+    'проверить уведомления в Telegram':
+        'tester les notifications Telegram',
+    'путь к файлу с ключом бота — не сам ключ':
+        'chemin du fichier contenant le jeton — pas le jeton lui-même',
+    'сообщение в Telegram не ушло: {}':
+        'le message Telegram n’est pas parti : {}',
+    'сообщение в Telegram отправлено':
+        'message Telegram envoyé',
+    'уведомления не настроены':
+        'les notifications ne sont pas configurées',
+    'файл с ключом бота не читается: {}':
+        'fichier du jeton illisible : {}',
 }
