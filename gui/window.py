@@ -686,7 +686,10 @@ class Window(QMainWindow):
             беды = "; ".join(_('строка {}: {}').format(p.line_number, p.reason) for p in разбор.problems)
             self.каналы_ответ.setText(_('в файле есть непонятые строки — {}').format(беды))
 
-        по_папкам = {имя: (файлов, байт) for имя, файлов, байт in self.source.channel_stats()}
+        # Список перечитывают после правки — тут счёт нужен свежий.
+        по_папкам = {
+            имя: (файлов, байт) for имя, файлов, байт in self.source.channel_stats(fresh=True)
+        }
         self.список_каналов.setRowCount(len(self._каналы))
         for номер, канал in enumerate(self._каналы):
             файлов, байт = по_папкам.get(канал.name, (0, 0))

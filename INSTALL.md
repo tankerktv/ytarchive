@@ -218,10 +218,9 @@ python install.py --yes
 The “Update yt-dlp” button in the window’s settings and the command
 `ytarchive.py update` do the same.
 
-If `yt-dlp` was already installed system-wide before, that copy is the one
-in use, not the one in the program’s environment — keep updating it the way
-you always have. The button then shows what yt-dlp itself answered when
-asked to update.
+The program uses its own `yt-dlp` — the one the installer put into its
+environment — even when another copy is installed system-wide. That other
+copy stays yours: the program neither touches nor updates it.
 
 ## Uninstalling
 

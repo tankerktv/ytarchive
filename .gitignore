@@ -37,3 +37,4 @@ installer/out/
 # Среда разработки
 .vscode/
 .idea/
+.cache/

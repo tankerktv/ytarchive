@@ -315,3 +315,50 @@ def test_в_окне_роликов_дата_точная_у_скачанных_
     двери.таблица.selectRow(0)
     assert "2024-04-11" in двери.подпись.text()
     двери._дождаться_потоков()
+
+
+# --- счёт файлов -------------------------------------------------------------
+
+
+def test_счёт_годится_пока_архив_не_менялся_и_срок_не_вышел():
+    from core.status import is_fresh
+
+    assert is_fresh(saved_at=100.0, saved_key=("a",), now=130.0, key=("a",), ttl=60.0)
+    assert not is_fresh(saved_at=100.0, saved_key=("a",), now=161.0, key=("a",), ttl=60.0), "срок вышел"
+    assert not is_fresh(saved_at=100.0, saved_key=("a",), now=101.0, key=("b",), ttl=60.0), "архив изменился"
+    assert not is_fresh(saved_at=100.0, saved_key=("a",), now=50.0, key=("a",), ttl=60.0), (
+        "часы перевели назад — счёту из будущего не верим"
+    )
+
+
+def test_окно_не_обходит_архив_на_каждое_обновление(tmp_path):
+    """Настоящий случай: окно обновляется каждые две секунды и каждый раз
+    обходило все две тысячи файлов архива."""
+    (tmp_path / "_tools").mkdir()
+    (tmp_path / "Канал").mkdir()
+    (tmp_path / "Канал" / "2024-01-01 - А [aaaaaaaaaaa].mkv").write_text("x", encoding="utf-8")
+    учёт = tmp_path / "_tools" / "downloaded.txt"
+    учёт.write_text("youtube aaaaaaaaaaa\n", encoding="utf-8")
+    источник = ArchiveSource(
+        base=tmp_path, archive_path=учёт, logs_dir=tmp_path / "_logs",
+        lock_path=tmp_path / "_tools" / "ytarchive.lock",
+        channels_path=tmp_path / "_tools" / "channels.txt",
+        config_path=tmp_path / "ytarchive.toml", live_path=tmp_path / "_tools" / "live.json",
+    )
+    обходов = []
+    настоящий = источник._посчитать_папки
+    источник._посчитать_папки = lambda: обходов.append(1) or настоящий()
+
+    assert источник.channel_stats() == [("Канал", 1, 1)]
+    источник.channel_stats()
+    источник.channel_stats()
+    assert len(обходов) == 1, "повторные вопросы отвечены из сохранённого"
+
+    # Скачался новый ролик: учёт дописан — счёт обязан обновиться сразу.
+    (tmp_path / "Канал" / "2024-01-02 - Б [bbbbbbbbbbb].mkv").write_text("xy", encoding="utf-8")
+    учёт.write_text("youtube aaaaaaaaaaa\nyoutube bbbbbbbbbbb\n", encoding="utf-8")
+    assert источник.channel_stats() == [("Канал", 2, 3)]
+    assert len(обходов) == 2
+
+    источник.channel_stats(fresh=True)
+    assert len(обходов) == 3, "по прямой просьбе пересчитываем всегда"

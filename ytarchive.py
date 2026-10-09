@@ -23,6 +23,8 @@ from core.install import extend_path  # noqa: E402
 
 # Программы, поставленные в окружение (yt-dlp), лежат рядом с интерпретатором.
 # С ярлыка окружение никто не «включает», и без этого их было бы не найти.
+# Свой каталог — первым: работать должна та копия, которую программа ставит
+# и обновляет сама.
 os.environ["PATH"] = extend_path(
     os.environ.get("PATH", ""), str(Path(sys.executable).parent), os.pathsep
 )

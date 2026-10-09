@@ -262,21 +262,22 @@ def test_непонятный_ответ_не_считается_согласи�
 # --- поиск программ ---
 
 
-def test_каталог_окружения_дописывается_в_конец():
-    """В конец, а не в начало: свой yt-dlp человека должен побеждать тот,
-    что поставил установщик, — иначе обновление привычным способом молча
-    перестало бы действовать."""
+def test_каталог_окружения_идёт_первым():
+    """Настоящий случай: общий yt-dlp стоял через pip в старом Python и
+    обновиться не мог, а свежий из окружения программы до работы не доходил.
+    Кнопка «Обновить yt-dlp» обновляла копию, которой никто не пользовался."""
     итог = extend_path("/usr/bin:/bin", "/opt/yta/.venv/bin", ":")
-    assert итог == "/usr/bin:/bin:/opt/yta/.venv/bin"
+    assert итог == "/opt/yta/.venv/bin:/usr/bin:/bin"
 
 
-def test_каталог_не_дописывается_дважды():
-    путь = r"C:\Windows;C:\yta\.venv\Scripts"
-    assert extend_path(путь, r"C:\yta\.venv\Scripts", ";") == путь
+def test_каталог_уже_в_списке_переезжает_в_начало_а_не_двоится():
+    путь = r"C:\Windows;C:\yta\.venv\Scripts;C:\Tools"
+    assert extend_path(путь, r"C:\yta\.venv\Scripts", ";") == r"C:\yta\.venv\Scripts;C:\Windows;C:\Tools"
 
 
 def test_пустой_список_поиска():
     assert extend_path("", "/opt/yta/.venv/bin", ":") == "/opt/yta/.venv/bin"
+
 
 
 def test_пакет_для_старого_python_на_новом_не_обещаем():

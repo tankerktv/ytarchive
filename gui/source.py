@@ -101,6 +101,10 @@ def осмотреть_папку(path: Path, *, учёт: str, нынешняя
     )
 
 
+#: Сколько секунд верить сохранённому счёту файлов, если архив не менялся.
+STATS_TTL = 60.0
+
+
 @dataclass
 class ArchiveSource:
     """Настоящий источник: файлы архива и отдельный процесс выкачки."""
@@ -279,6 +283,7 @@ class ArchiveSource:
             except OSError as ошибка:
                 return Записано(False, _("папку переименовать не вышло: {}").format(ошибка))
 
+        self.forget_stats()
         ответ = self.write_channels(format_channels(rename_channel(разбор.channels, index, новое)))
         if not ответ.ok:
             # Список не записался — возвращаем папку, иначе имя и папка разойдутся.
@@ -425,12 +430,43 @@ class ArchiveSource:
             return Записано(False, _('не сохранилось: {}').format(ошибка))
         return Записано(True, успех)
 
-    def channel_stats(self) -> list[tuple[str, int, int]]:
+    def _ключ_архива(self) -> tuple:
+        """То, что меняется вместе с архивом: учёт и список каналов."""
+        ключ = []
+        for путь in (self.archive_path, self.channels_path):
+            try:
+                сведения = путь.stat()
+                ключ.append((сведения.st_mtime_ns, сведения.st_size))
+            except OSError:
+                ключ.append(None)
+        return tuple(ключ)
+
+    def forget_stats(self) -> None:
+        """Сбросить сохранённый счёт: папки только что поменялись нашими руками."""
+        self._счёт = None
+
+    def channel_stats(self, fresh: bool = False) -> list[tuple[str, int, int]]:
         """Сколько файлов и байт лежит в папке каждого канала.
 
         Считаем по файлам, а не по переписи YouTube: перепись требует сети
         и занимает минуты, а окно должно отвечать сразу.
+
+        Счёт сохраняется: см. `core.status.is_fresh`. `fresh` требует
+        пересчитать — после переименования канала или по просьбе человека.
         """
+        from core.status import is_fresh
+
+        ключ = self._ключ_архива()
+        сохранённый = getattr(self, "_счёт", None)
+        if not fresh and сохранённый is not None:
+            когда, прежний_ключ, значение = сохранённый
+            if is_fresh(saved_at=когда, saved_key=прежний_ключ, now=time.time(), key=ключ, ttl=STATS_TTL):
+                return значение
+        значение = self._посчитать_папки()
+        self._счёт = (time.time(), ключ, значение)
+        return значение
+
+    def _посчитать_папки(self) -> list[tuple[str, int, int]]:
         итог: list[tuple[str, int, int]] = []
         try:
             папки = sorted(p for p in self.base.iterdir() if p.is_dir())
