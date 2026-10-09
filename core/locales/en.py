@@ -58,7 +58,6 @@
     "в файле есть непонятые строки — {}": "the file contains unreadable lines — {}",
     "строка {}: {}": "line {}: {}",
     "список каналов сохранён": "channel list saved",
-    "логотип": "logo",
     "Влезет": "Fits",
     "Может не влезть": "May not fit",
     "НЕ ВЛЕЗЕТ": "WILL NOT FIT",
@@ -710,4 +709,8 @@
         'showing {} of {}',
     'роликов без описания: {}; каналов без описания: {}':
         'videos without a description file: {}; channels without one: {}',
+    'считаю объём…':
+        'measuring…',
+    '{} · объём не удалось узнать: {}':
+        '{} · size unknown for: {}',
 }

@@ -89,8 +89,6 @@
         'Zeile {}: {}',
     'список каналов сохранён':
         'Kanalliste gespeichert',
-    'логотип':
-        'Logo',
     'Влезет':
         'Passt',
     'Может не влезть':
@@ -781,4 +779,8 @@
         '{} von {} angezeigt',
     'роликов без описания: {}; каналов без описания: {}':
         'Videos ohne Beschreibungsdatei: {}; Kanäle ohne: {}',
+    'считаю объём…':
+        'Umfang wird ermittelt…',
+    '{} · объём не удалось узнать: {}':
+        '{} · Umfang unbekannt für: {}',
 }

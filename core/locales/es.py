@@ -89,8 +89,6 @@
         'línea {}: {}',
     'список каналов сохранён':
         'lista de canales guardada',
-    'логотип':
-        'logotipo',
     'Влезет':
         'Cabe',
     'Может не влезть':
@@ -781,4 +779,8 @@
         'se muestran {} de {}',
     'роликов без описания: {}; каналов без описания: {}':
         'vídeos sin archivo de descripción: {}; canales sin él: {}',
+    'считаю объём…':
+        'calculando el tamaño…',
+    '{} · объём не удалось узнать: {}':
+        '{} · tamaño desconocido de: {}',
 }

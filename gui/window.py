@@ -126,7 +126,12 @@ class ПоискКаналов(QThread):
             адрес = fetch_avatar_url(кандидат, self.source.settings, ytdlp=self.source.ytdlp)
             if адрес:
                 ensure_avatar(self.source.avatars_dir, кандидат.channel_id, адрес)
-                self.измерено.emit(номер, replace(кандидат, avatar_url=адрес), _("логотип"))
+                # Текст — то, что человек увидит рядом с именем канала, пока идёт
+                # перепись. Раньше здесь стояло служебное «логотип»: слово
+                # называло шаг программы, а человеку ничего не говорило.
+                self.измерено.emit(
+                    номер, replace(кандидат, avatar_url=адрес), _("считаю объём…")
+                )
             if self._бросить:
                 break
             измеренный, ответ_меры = measure_channel(
@@ -622,11 +627,12 @@ class Window(QMainWindow):
         self._поиск = ПоискКаналов(self.source, запрос)
         self._поиск.найдено.connect(self._показать_находки)
         self._поиск.измерено.connect(self._обновить_находку)
-        self._поиск.закончено.connect(lambda: self.кнопка_искать.setEnabled(True))
+        self._поиск.закончено.connect(self._поиск_закончен)
         self._поиск.start()
 
     def _показать_находки(self, кандидаты: list, ответ: str) -> None:
         self._находки = list(кандидаты)
+        self._итог_поиска = ответ
         self.поиск_ответ.setText(ответ)
         self.поиск_ответ.setVisible(bool(ответ))
         self.находки.setVisible(bool(self._находки))
@@ -634,6 +640,18 @@ class Window(QMainWindow):
         self.находки.setRowCount(len(self._находки))
         for номер, кандидат in enumerate(self._находки):
             self._нарисовать_находку(номер, кандидат)
+
+    def _поиск_закончен(self) -> None:
+        """Вернуть под поиск его итог. Иначе там навсегда оставалась строка
+        про последний канал — «Такой-то: считаю объём…», хотя считать уже
+        нечего."""
+        self.кнопка_искать.setEnabled(True)
+        итог = getattr(self, "_итог_поиска", "")
+        неизмеренные = [к.name for к in self._находки if not к.measured]
+        if неизмеренные:
+            итог = _('{} · объём не удалось узнать: {}').format(итог, ", ".join(неизмеренные))
+        self.поиск_ответ.setText(итог)
+        self.поиск_ответ.setVisible(bool(итог))
 
     def _обновить_находку(self, номер: int, кандидат, ответ: str) -> None:
         if 0 <= номер < len(self._находки):

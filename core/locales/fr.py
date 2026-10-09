@@ -89,8 +89,6 @@
         'ligne {} : {}',
     'список каналов сохранён':
         'liste des chaînes enregistrée',
-    'логотип':
-        'logo',
     'Влезет':
         'Tient',
     'Может не влезть':
@@ -781,4 +779,8 @@
         '{} affichées sur {}',
     'роликов без описания: {}; каналов без описания: {}':
         'vidéos sans fichier de description : {} ; chaînes sans : {}',
+    'считаю объём…':
+        'calcul de la taille…',
+    '{} · объём не удалось узнать: {}':
+        '{} · taille inconnue pour : {}',
 }
