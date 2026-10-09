@@ -13,6 +13,10 @@ pytestmark = pytest.mark.slow
 pytest.importorskip("PySide6", reason="окно проверяется только там, где есть Qt")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# QtNetwork на Linux тянет системную библиотеку Kerberos; где её нет, защиты
+# от второго окна нет вовсе, и проверять нечего.
+pytest.importorskip("PySide6.QtNetwork", exc_type=ImportError, reason="нет QtNetwork или его системных библиотек")
+
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from gui.single import имя_соединения, попросить_показаться, слушать  # noqa: E402
